@@ -8,6 +8,7 @@ struct TripDetailView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @Environment(TripImporter.self) private var importer
+    @Environment(BoundaryStore.self) private var boundaryStore
 
     @State private var mapPosition: MapCameraPosition = .automatic
     @State private var focusedZone: String?
@@ -275,7 +276,7 @@ struct TripDetailView: View {
     private func focus(_ zone: CityZone) {
         withAnimation(.smooth(duration: 0.8)) {
             focusedZone = zone.id
-            mapPosition = .region(zone.region)
+            mapPosition = .region(boundaryStore.region(for: zone))
         }
     }
 

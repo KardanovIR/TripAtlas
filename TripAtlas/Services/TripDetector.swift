@@ -176,4 +176,5 @@ enum SettingsKeys {
     static let homeRadiusKm = "homeRadiusKm"
     static let maxGapHours = "maxGapHours"
     static let minPhotos = "minPhotos"
+    static let cityBoundaries = "cityBoundaries"
 }

@@ -8,6 +8,10 @@ struct SettingsView: View {
     @AppStorage(SettingsKeys.homeRadiusKm) private var homeRadiusKm: Double = 80
     @AppStorage(SettingsKeys.maxGapHours) private var maxGapHours: Double = 72
     @AppStorage(SettingsKeys.minPhotos) private var minPhotos: Int = 5
+    @AppStorage(SettingsKeys.cityBoundaries) private var useBoundaries = true
+
+    @Environment(BoundaryStore.self) private var boundaryStore
+    @State private var clearing = false
 
     @Query private var dismissed: [DismissedSuggestion]
 
@@ -25,6 +29,30 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    Toggle("Границы городов", isOn: $useBoundaries)
+                    if useBoundaries {
+                        Button {
+                            clearing = true
+                            Task {
+                                await boundaryStore.clear()
+                                clearing = false
+                            }
+                        } label: {
+                            HStack {
+                                Text("Обновить границы")
+                                Spacer()
+                                if clearing { ProgressView() }
+                            }
+                        }
+                        .disabled(clearing)
+                    }
+                } header: {
+                    Text("Карта")
+                } footer: {
+                    Text("Настоящие границы городов загружаются из OpenStreetMap (© участники OpenStreetMap) и сохраняются на устройстве. Для этого в сервис Nominatim отправляются только координаты центров городов. Если границу найти не удалось, город показывается пунктирным кругом.")
+                }
+
+                Section {
                     Button("Вернуть скрытые (\(dismissed.count))") {
                         try? context.delete(model: DismissedSuggestion.self)
                         try? context.save()
@@ -35,7 +63,7 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    Label("Фото анализируются только на устройстве. Для названий городов в Apple отправляются лишь координаты.", systemImage: "lock.shield")
+                    Label("Фото анализируются только на устройстве. Для названий городов (Apple) и их границ (OpenStreetMap) отправляются лишь координаты.", systemImage: "lock.shield")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }

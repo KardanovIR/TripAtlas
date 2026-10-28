@@ -83,6 +83,7 @@ final class TripImporter {
         context.insert(trip)
         try? context.save()
         candidates.removeAll { $0.id == candidate.id }
+        BoundaryStore.prefetch(places)
     }
 
     func createAll(in context: ModelContext) async {

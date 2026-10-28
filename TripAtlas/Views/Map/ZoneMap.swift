@@ -1,22 +1,45 @@
 import SwiftUI
 import MapKit
 
-/// Содержимое карты: полупрозрачные зоны городов.
+/// Содержимое карты: зоны городов.
 ///
-/// Издалека зоны в несколько километров не видны, поэтому при отдалении поверх них
-/// рисуются светящиеся точки фиксированного размера, а при приближении — подписи
-/// с названием города и обложкой.
+/// Если для города загружена граница из OpenStreetMap — рисуется настоящий полигон,
+/// иначе — круг вокруг мест съёмки. Издалека зоны не видны, поэтому при отдалении
+/// поверх них рисуются светящиеся точки, а при приближении — подписи с обложкой.
 struct ZoneMapContent: MapContent {
     let zones: [CityZone]
     let showLabels: Bool
+    var boundaries: [String: [MKPolygon]] = [:]
     var onSelect: ((CityZone) -> Void)? = nil
 
+    private struct Shape: Identifiable {
+        let id: String
+        let polygon: MKPolygon
+        let color: Color
+    }
+
+    private var polygonShapes: [Shape] {
+        zones.flatMap { zone in
+            (boundaries[zone.id] ?? []).enumerated().map { index, polygon in
+                Shape(id: "\(zone.id)#\(index)", polygon: polygon, color: Theme.zoneColor(visits: zone.visits))
+            }
+        }
+    }
+
+    private var circleZones: [CityZone] { zones.filter { boundaries[$0.id] == nil } }
+
     var body: some MapContent {
-        ForEach(zones) { zone in
+        ForEach(polygonShapes) { shape in
+            MapPolygon(shape.polygon)
+                .foregroundStyle(shape.color.opacity(0.22))
+                .stroke(shape.color.opacity(0.9), lineWidth: 1.5)
+        }
+
+        ForEach(circleZones) { zone in
             let color = Theme.zoneColor(visits: zone.visits)
             MapCircle(center: zone.center, radius: zone.radiusMeters)
                 .foregroundStyle(color.opacity(0.22))
-                .stroke(color.opacity(0.9), lineWidth: 1.5)
+                .stroke(color.opacity(0.9), style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
         }
 
         ForEach(showLabels ? [] : zones) { zone in
@@ -49,19 +72,47 @@ struct ZoneMap: View {
     var onSelect: ((CityZone) -> Void)? = nil
     /// Подписи появляются, когда камера ближе этого расстояния (м).
     var labelDistance: CLLocationDistance = 450_000
+    /// Показывать подпись «© OpenStreetMap» (обязательна, если на карте есть границы из OSM).
+    var showsAttribution = true
 
+    @Environment(BoundaryStore.self) private var boundaryStore
+    @AppStorage(SettingsKeys.cityBoundaries) private var useBoundaries = true
     @State private var cameraDistance: CLLocationDistance = .greatestFiniteMagnitude
+
+    private var boundaries: [String: [MKPolygon]] { useBoundaries ? boundaryStore.polygons : [:] }
+    private var hasOSMData: Bool { zones.contains { boundaries[$0.id] != nil } }
 
     var body: some View {
         Map(position: $position, interactionModes: interactive ? .all : []) {
             ZoneMapContent(zones: zones,
                            showLabels: cameraDistance < labelDistance || zones.count <= 3,
+                           boundaries: boundaries,
                            onSelect: onSelect)
         }
         .mapStyle(.standard(elevation: .flat, emphasis: .muted, pointsOfInterest: .excludingAll))
         .onMapCameraChange(frequency: .onEnd) { context in
             cameraDistance = context.camera.distance
         }
+        .overlay(alignment: .bottomTrailing) {
+            if showsAttribution && hasOSMData {
+                OSMAttribution().padding(8)
+            }
+        }
+        .task(id: useBoundaries ? zones.map(\.id) + ["#\(boundaryStore.generation)"] : []) {
+            await boundaryStore.load(zones)
+        }
+    }
+}
+
+/// Обязательное указание авторства данных OpenStreetMap.
+struct OSMAttribution: View {
+    var body: some View {
+        Link("© OpenStreetMap", destination: URL(string: "https://www.openstreetmap.org/copyright")!)
+            .font(.system(size: 10, weight: .medium))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(.regularMaterial, in: Capsule())
     }
 }
 

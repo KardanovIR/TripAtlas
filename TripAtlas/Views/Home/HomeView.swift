@@ -6,6 +6,8 @@ struct HomeView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.scenePhase) private var scenePhase
     @Environment(TripImporter.self) private var importer
+    @Environment(BoundaryStore.self) private var boundaryStore
+    @AppStorage(SettingsKeys.cityBoundaries) private var useBoundaries = true
 
     @Query(sort: \Trip.startDate, order: .reverse) private var trips: [Trip]
     @Query private var dismissed: [DismissedSuggestion]
@@ -101,7 +103,7 @@ struct HomeView: View {
             WorldMapView(trips: trips)
         } label: {
             ZStack(alignment: .bottomLeading) {
-                ZoneMap(zones: zones, position: $heroPosition, interactive: false)
+                ZoneMap(zones: zones, position: $heroPosition, interactive: false, showsAttribution: false)
                     .allowsHitTesting(false)
 
                 // Затемнение под статус-бар и плавный переход в фон снизу.
@@ -116,6 +118,11 @@ struct HomeView: View {
                     Text(heroSubtitle)
                         .font(.subheadline.weight(.medium))
                         .foregroundStyle(.secondary)
+                    if useBoundaries && !boundaryStore.polygons.isEmpty {
+                        Text("Границы городов © OpenStreetMap")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 76)
