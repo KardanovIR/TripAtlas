@@ -89,6 +89,7 @@ struct Chip: View {
     var body: some View {
         Text(text)
             .font(.subheadline.weight(.medium))
+            .foregroundStyle(Color.primary)
             .padding(.horizontal, 12)
             .padding(.vertical, 7)
             .background(Color(.secondarySystemBackground), in: Capsule())
@@ -115,4 +116,16 @@ enum RU {
     static func photos(_ n: Int) -> String { count(n, "фото", "фото", "фото") }
     static func days(_ n: Int) -> String { count(n, "день", "дня", "дней") }
     static func trips(_ n: Int) -> String { count(n, "поездка", "поездки", "поездок") }
+}
+
+// MARK: - Кнопки
+
+/// Лёгкое «вдавливание» при нажатии — для карточек и цифр в сводке.
+struct PressableButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.95 : 1)
+            .opacity(configuration.isPressed ? 0.75 : 1)
+            .animation(.snappy(duration: 0.2), value: configuration.isPressed)
+    }
 }

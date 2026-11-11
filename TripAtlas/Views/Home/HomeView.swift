@@ -34,7 +34,7 @@ struct HomeView: View {
                     hero
 
                     VStack(alignment: .leading, spacing: 32) {
-                        StatsPanel(stats: stats)
+                        StatsPanel(stats: stats, transition: transition)
                             .padding(.top, -52)
 
                         if !stats.countryCodes.isEmpty { countriesSection }
@@ -62,6 +62,18 @@ struct HomeView: View {
                 }
             }
             .toolbarBackground(.hidden, for: .navigationBar)
+            .navigationDestination(for: AtlasRoute.self) { route in
+                switch route {
+                case .countries:
+                    AtlasView(tab: .countries)
+                        .navigationTransition(.zoom(sourceID: "atlas-countries", in: transition))
+                case .cities:
+                    AtlasView(tab: .cities)
+                        .navigationTransition(.zoom(sourceID: "atlas-cities", in: transition))
+                case .country(let code):
+                    CountryDetailView(code: code)
+                }
+            }
             .navigationDestination(for: Trip.self) { trip in
                 TripDetailView(trip: trip)
                     .navigationTransition(.zoom(sourceID: trip.signature, in: transition))
@@ -148,16 +160,28 @@ struct HomeView: View {
 
     private var countriesSection: some View {
         VStack(alignment: .leading, spacing: 14) {
-            SectionTitle(title: "Страны", trailing: "\(stats.countryCount)")
+            NavigationLink(value: AtlasRoute.countries) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Страны").font(Theme.title(26))
+                    Spacer()
+                    Text("Все \(Image(systemName: "chevron.right"))")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .buttonStyle(.plain)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(stats.countryCodes, id: \.self) { code in
-                        Chip(text: "\(Geo.flag(for: code))  \(Geo.countryName(for: code))")
-                            .contextMenu {
-                                Button("Я не был в этой стране", systemImage: "flag.slash", role: .destructive) {
-                                    countryToRemove = code
-                                }
+                        NavigationLink(value: AtlasRoute.country(code)) {
+                            Chip(text: "\(Geo.flag(for: code))  \(Geo.countryName(for: code))")
+                        }
+                        .buttonStyle(PressableButtonStyle())
+                        .contextMenu {
+                            Button("Я не был в этой стране", systemImage: "flag.slash", role: .destructive) {
+                                countryToRemove = code
                             }
+                        }
                     }
                 }
             }
@@ -242,14 +266,23 @@ struct HomeView: View {
 
 private struct StatsPanel: View {
     let stats: TravelStats
+    let transition: Namespace.ID
 
     var body: some View {
         HStack(spacing: 0) {
             item(stats.tripCount, RU.word(stats.tripCount, "поездка", "поездки", "поездок"))
             divider
-            item(stats.countryCount, RU.word(stats.countryCount, "страна", "страны", "стран"))
+            NavigationLink(value: AtlasRoute.countries) {
+                item(stats.countryCount, RU.word(stats.countryCount, "страна", "страны", "стран"), tappable: true)
+            }
+            .buttonStyle(PressableButtonStyle())
+            .matchedTransitionSource(id: "atlas-countries", in: transition)
             divider
-            item(stats.cityCount, RU.word(stats.cityCount, "город", "города", "городов"))
+            NavigationLink(value: AtlasRoute.cities) {
+                item(stats.cityCount, RU.word(stats.cityCount, "город", "города", "городов"), tappable: true)
+            }
+            .buttonStyle(PressableButtonStyle())
+            .matchedTransitionSource(id: "atlas-cities", in: transition)
             divider
             item(stats.dayCount, RU.word(stats.dayCount, "день", "дня", "дней") + " в пути")
         }
@@ -262,18 +295,26 @@ private struct StatsPanel: View {
         Rectangle().fill(.separator).frame(width: 1, height: 34)
     }
 
-    private func item(_ value: Int, _ label: String) -> some View {
+    private func item(_ value: Int, _ label: String, tappable: Bool = false) -> some View {
         VStack(spacing: 4) {
             Text("\(value)")
                 .font(Theme.number(28))
+                .foregroundStyle(tappable ? AnyShapeStyle(Theme.sunset) : AnyShapeStyle(.primary))
                 .contentTransition(.numericText(value: Double(value)))
-            Text(label)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
+            HStack(spacing: 2) {
+                Text(label)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                if tappable {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 8, weight: .bold))
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
+        .contentShape(Rectangle())
     }
 }
 
