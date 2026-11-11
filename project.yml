@@ -23,6 +23,7 @@ targets:
     platform: iOS
     sources:
       - path: TripAtlas
+        type: syncedFolder   # новые файлы подхватываются без перегенерации
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(BUNDLE_ID_PREFIX).tripatlas
@@ -41,6 +42,7 @@ targets:
     platform: iOS
     sources:
       - path: TripAtlasTests
+        type: syncedFolder   # новые файлы подхватываются без перегенерации
     dependencies:
       - target: TripAtlas
     settings:

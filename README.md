@@ -10,7 +10,7 @@
 
 ## Сборка
 
-Нужны **macOS с Xcode 26** и [Homebrew](https://brew.sh). Файл `.xcodeproj` в репозитории
+Нужны **macOS с Xcode 26**, [Homebrew](https://brew.sh) и XcodeGen 2.45+ (`make setup` поставит или обновит его). Файл `.xcodeproj` в репозитории
 не хранится — он генерируется [XcodeGen](https://github.com/yonaskolb/XcodeGen) из `project.yml`.
 
 ```bash
@@ -41,7 +41,7 @@ BUNDLE_ID_PREFIX = com.yourname   // у каждого свой, иначе bund
 | Команда        | Что делает                                    |
 |----------------|-----------------------------------------------|
 | `make setup`   | первый запуск                                  |
-| `make project` | пересоздать `.xcodeproj` (после `git pull` или новых файлов) |
+| `make project` | пересоздать `.xcodeproj` — нужно только после изменений в `project.yml` |
 | `make test`    | тесты в симуляторе (`make test SIM="iPhone 16"`) |
 
 **Симулятор:** перетащите в окно симулятора фото с GPS в EXIF (снятые на телефон),
