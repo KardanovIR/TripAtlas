@@ -93,58 +93,51 @@ struct AtlasView: View {
 
     @ViewBuilder
     private func countriesContent(proxy: ScrollViewProxy) -> some View {
-        let visited = visitedCodes
-        let all = WorldCountries.list(including: visited)
-        let sections = countrySections(all, visited: visited)
+        let visited: Set<String> = visitedCodes
+        let all: [WorldCountry] = WorldCountries.list(including: visited)
+        let sections: [CountrySection] = countrySections(all, visited: visited)
+        let sovereignVisited: Int = visited.intersection(WorldCountries.sovereignCodes).count
+        let territories: Int = visited.subtracting(WorldCountries.sovereignCodes).count
+        let progress: [ContinentProgress] = continentProgress(sections)
 
         if search.isEmpty {
             WorldProgressCard(
-                visited: visited.intersection(WorldCountries.sovereignCodes).count,
-                territories: visited.subtracting(WorldCountries.sovereignCodes).count,
-                sections: sections.map { ContinentProgress(continent: $0.continent, visited: $0.visited, total: $0.total) }
-            ) { continent in
+                visited: sovereignVisited,
+                territories: territories,
+                sections: progress
+            ) { (continent: Continent) in
                 withAnimation(.smooth) { proxy.scrollTo(continent.id, anchor: .top) }
             }
 
             FilterBar(selection: $filter)
         }
 
-        let citiesByCountry = Dictionary(grouping: zones) { $0.countryCode ?? "" }
-        let tripsByCountry = Dictionary(trips.flatMap { trip in trip.countryCodes.map { ($0, 1) } }, uniquingKeysWith: +)
+        let citiesByCountry: [String: Int] = cityCountByCountry()
+        let tripsByCountry: [String: Int] = tripCountByCountry()
 
-        ForEach(sections) { section in
-            let rows = visibleRows(section, visited: visited)
+        ForEach(sections) { (section: CountrySection) in
+            let rows: [WorldCountry] = visibleRows(section, visited: visited)
             if !rows.isEmpty {
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack(alignment: .firstTextBaseline) {
-                        Label(section.continent.title, systemImage: section.continent.symbol)
-                            .font(Theme.title(22))
-                        Spacer()
-                        Text("\(section.visited) из \(section.total)")
-                            .font(.subheadline.weight(.medium).monospacedDigit())
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.horizontal, 4)
-
-                    CardList(items: rows) { country in
-                        let isVisited = visited.contains(country.code)
-                        let row = CountryRow(country: country, visited: isVisited,
-                                             cities: citiesByCountry[country.code]?.count ?? 0,
-                                             trips: tripsByCountry[country.code] ?? 0)
-                        if isVisited {
-                            NavigationLink(value: AtlasRoute.country(country.code)) { row }
-                                .buttonStyle(.plain)
-                        } else {
-                            row
-                        }
-                    }
-                }
-                .id(section.continent.id)
+                countrySectionView(section, rows: rows, visited: visited,
+                                   cities: citiesByCountry, tripCounts: tripsByCountry)
+                    .id(section.continent.id)
             }
         }
 
-        if sections.allSatisfy({ section in section.countries.allSatisfy { !matches($0.name) } }) {
+        if !search.isEmpty && !hasSearchResults(sections) {
             ContentUnavailableView.search(text: search)
+        }
+    }
+
+    private func continentProgress(_ sections: [CountrySection]) -> [ContinentProgress] {
+        sections.map { (section: CountrySection) -> ContinentProgress in
+            ContinentProgress(continent: section.continent, visited: section.visited, total: section.total)
+        }
+    }
+
+    private func hasSearchResults(_ sections: [CountrySection]) -> Bool {
+        sections.contains { (section: CountrySection) -> Bool in
+            section.countries.contains { (country: WorldCountry) -> Bool in matches(country.name) }
         }
     }
 
@@ -177,47 +170,20 @@ struct AtlasView: View {
 
     @ViewBuilder
     private var citiesContent: some View {
-        let all = zones
-        let filtered = all.filter { matches($0.name) || matches($0.countryName ?? "") }
+        let all: [CityZone] = zones
+        let sections: [CitySection] = citySections(all)
 
         if all.isEmpty {
             ContentUnavailableView("Городов пока нет", systemImage: "building.2",
                                    description: Text("Создайте страницы поездок — города появятся здесь."))
         } else {
             if search.isEmpty {
-                CitiesSummaryCard(cities: all.count, countries: Set(all.compactMap(\.countryCode)).count)
+                CitiesSummaryCard(cities: all.count, countries: countryCount(all))
                 favorites(all)
             }
 
-            let sections = Dictionary(grouping: filtered) { $0.countryCode ?? "" }
-                .map { CitySection(code: $0.key, cities: $0.value.sorted { $0.photoCount > $1.photoCount }) }
-                .sorted {
-                    $0.cities.count != $1.cities.count
-                        ? $0.cities.count > $1.cities.count
-                        : $0.name.compare($1.name, locale: .current) == .orderedAscending
-                }
-
             ForEach(sections) { section in
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack(alignment: .firstTextBaseline) {
-                        Text("\(Geo.flag(for: section.code))  \(section.name)")
-                            .font(Theme.title(22))
-                        Spacer()
-                        Text("\(section.cities.count)")
-                            .font(.subheadline.weight(.medium).monospacedDigit())
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.horizontal, 4)
-
-                    CardList(items: section.cities) { zone in
-                        NavigationLink {
-                            CityPhotosView(zone: zone, trips: trips)
-                        } label: {
-                            CityRow(zone: zone)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
+                citySectionView(section)
             }
 
             if sections.isEmpty {
@@ -226,10 +192,106 @@ struct AtlasView: View {
         }
     }
 
+    // MARK: - Расчёты (вынесены из body, чтобы не перегружать компилятор)
+
+    /// Города (после поиска), сгруппированные по странам: больше городов — выше.
+    private func citySections(_ all: [CityZone]) -> [CitySection] {
+        let filtered: [CityZone] = all.filter { (zone: CityZone) -> Bool in
+            matches(zone.name) || matches(zone.countryName ?? "")
+        }
+        let groups: [String: [CityZone]] = Dictionary(grouping: filtered) { (zone: CityZone) -> String in
+            zone.countryCode ?? ""
+        }
+        var result: [CitySection] = []
+        for (code, cities) in groups {
+            let sorted: [CityZone] = cities.sorted { (a: CityZone, b: CityZone) -> Bool in a.photoCount > b.photoCount }
+            result.append(CitySection(code: code, cities: sorted))
+        }
+        result.sort { (a: CitySection, b: CitySection) -> Bool in
+            if a.cities.count != b.cities.count { return a.cities.count > b.cities.count }
+            return a.name.compare(b.name, locale: .current) == .orderedAscending
+        }
+        return result
+    }
+
+    private func countryCount(_ zones: [CityZone]) -> Int {
+        Set(zones.compactMap { (zone: CityZone) -> String? in zone.countryCode }).count
+    }
+
+    private func citySectionView(_ section: CitySection) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("\(Geo.flag(for: section.code))  \(section.name)")
+                    .font(Theme.title(22))
+                Spacer()
+                Text("\(section.cities.count)")
+                    .font(.subheadline.weight(.medium).monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 4)
+
+            CardList(items: section.cities) { (zone: CityZone) in
+                NavigationLink {
+                    CityPhotosView(zone: zone, trips: trips)
+                } label: {
+                    CityRow(zone: zone)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private func countrySectionView(_ section: CountrySection, rows: [WorldCountry], visited: Set<String>,
+                                    cities: [String: Int], tripCounts: [String: Int]) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Label(section.continent.title, systemImage: section.continent.symbol)
+                    .font(Theme.title(22))
+                Spacer()
+                Text("\(section.visited) из \(section.total)")
+                    .font(.subheadline.weight(.medium).monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 4)
+
+            CardList(items: rows) { (country: WorldCountry) in
+                countryRow(country, visited: visited.contains(country.code),
+                           cities: cities[country.code] ?? 0, trips: tripCounts[country.code] ?? 0)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func countryRow(_ country: WorldCountry, visited: Bool, cities: Int, trips: Int) -> some View {
+        let row = CountryRow(country: country, visited: visited, cities: cities, trips: trips)
+        if visited {
+            NavigationLink(value: AtlasRoute.country(country.code)) { row }
+                .buttonStyle(.plain)
+        } else {
+            row
+        }
+    }
+
+    private func cityCountByCountry() -> [String: Int] {
+        var result: [String: Int] = [:]
+        for zone in zones {
+            result[zone.countryCode ?? "", default: 0] += 1
+        }
+        return result
+    }
+
+    private func tripCountByCountry() -> [String: Int] {
+        var result: [String: Int] = [:]
+        for trip in trips {
+            for code in trip.countryCodes { result[code, default: 0] += 1 }
+        }
+        return result
+    }
+
     /// Карусель городов, где снято больше всего фото.
     @ViewBuilder
     private func favorites(_ all: [CityZone]) -> some View {
-        let top = Array(all.sorted { $0.photoCount > $1.photoCount }.prefix(6))
+        let top: [CityZone] = Array(all.sorted { (a: CityZone, b: CityZone) -> Bool in a.photoCount > b.photoCount }.prefix(6))
         if top.count >= 3 {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Больше всего фото")
