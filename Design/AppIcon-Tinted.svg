@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="sunset" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FF8A5B"/>
+      <stop offset="0.5" stop-color="#F5497A"/>
+      <stop offset="1" stop-color="#7B4CF0"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.22" cy="0.15" r="0.8">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.32"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="dotgrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FF8A5B"/>
+      <stop offset="1" stop-color="#F5497A"/>
+    </linearGradient>
+    <clipPath id="globe"><circle cx="512" cy="600" r="430"/></clipPath>
+    <filter id="drop" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#2a0b4a" flood-opacity="0"/>
+    </filter>
+    
+  </defs>
+  <rect width="1024" height="1024" fill="#000"/>
+  
+  <g fill="none" stroke="#fff" stroke-width="7" opacity="0.18" clip-path="url(#globe)">
+    <circle cx="512" cy="600" r="430"/>
+    <ellipse cx="512" cy="600" rx="150" ry="430"/>
+    <ellipse cx="512" cy="600" rx="300" ry="430"/>
+    <line x1="512" y1="170" x2="512" y2="1030"/>
+    <path d="M82 600 H942"/>
+    <path d="M120 420 Q512 360 904 420"/>
+    <path d="M120 780 Q512 840 904 780"/>
+  </g>
+  
+  <path d="M232 640 L282 552 L370 560 L420 486 L516 514 L598 462 L664 530 L770 536 L806 620 L752 690 L784 770 L668 800 L602 768 L506 820 L424 776 L330 800 L290 724 Z"
+        fill="#fff" fill-opacity="0.28" stroke="#fff" stroke-width="14" stroke-linejoin="round"/>
+  
+  <ellipse cx="512" cy="650" rx="62" ry="15" fill="#000" opacity="0"/>
+  <g filter="url(#drop)">
+    <path d="M512 646 C474 592 397 512 397 410 A115 115 0 1 1 627 410 C627 512 550 592 512 646 Z"
+          fill="#fff"/>
+    <circle cx="512" cy="410" r="50" fill="#000"/>
+  </g>
+</svg>
