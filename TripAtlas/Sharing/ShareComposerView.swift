@@ -2,7 +2,15 @@ import SwiftUI
 
 /// Экран «Поделиться поездкой»: карусель шаблонов, выбор фото, отправка.
 struct ShareComposerView: View {
+    enum Mode: String, CaseIterable, Identifiable {
+        case image, video
+        var id: Self { self }
+        var title: String { self == .image ? "Картинка" : "Видео" }
+    }
+
     @State private var model: ShareComposerModel
+    @State private var mode: Mode
+    @State private var flyover: FlyoverModel?
     @State private var selectedTemplate: ShareTemplate? = .poster
     @State private var activityItems: ActivityItems?
     @State private var toast: String?
@@ -16,28 +24,46 @@ struct ShareComposerView: View {
         let items: [Any]
     }
 
-    init(trip: Trip) {
+    init(trip: Trip, mode: Mode = .image) {
         _model = State(initialValue: ShareComposerModel(trip: trip))
+        _mode = State(initialValue: mode)
     }
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 18) {
-                carousel
-                templatePicker
-                optionsRow
-                photoStrip
-                actions
+            Group {
+                switch mode {
+                case .image:
+                    VStack(spacing: 18) {
+                        carousel
+                        templatePicker
+                        optionsRow
+                        photoStrip
+                        actions
+                    }
+                    .padding(.bottom, 8)
+                case .video:
+                    if let flyover { FlyoverPanel(model: flyover) }
+                }
             }
-            .padding(.bottom, 8)
             .background(Color(.systemGroupedBackground))
-            .navigationTitle("Поделиться")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Закрыть") { dismiss() }
                 }
+                ToolbarItem(placement: .principal) {
+                    Picker("Формат", selection: $mode.animation(.snappy)) {
+                        ForEach(Mode.allCases) { Text($0.title).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 220)
+                }
             }
+            .onChange(of: mode, initial: true) { _, new in
+                if new == .video, flyover == nil { flyover = FlyoverModel(trip: model.trip) }
+            }
+            .onDisappear { flyover?.cancel() }
             .overlay(alignment: .top) { toastView }
             .sheet(item: $activityItems) { payload in
                 ActivityView(items: payload.items) { completed in

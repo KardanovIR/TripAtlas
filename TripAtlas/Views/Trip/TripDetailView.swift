@@ -21,6 +21,7 @@ struct TripDetailView: View {
     @State private var openedZone: CityZone?
     @State private var removeCandidate: RemovalTarget?
     @State private var showShare = false
+    @State private var shareMode: ShareComposerView.Mode = .image
 
     private enum RemovalTarget: Identifiable {
         case city(CityZone), country(String)
@@ -75,7 +76,7 @@ struct TripDetailView: View {
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar { menu }
         .fullScreenCover(isPresented: $showShare) {
-            ShareComposerView(trip: trip)
+            ShareComposerView(trip: trip, mode: shareMode)
         }
         .fullScreenCover(item: $viewerStart) { selection in
             PhotoViewer(assetIDs: trip.assetIdentifiers, index: selection.id, trip: trip)
@@ -315,27 +316,45 @@ struct TripDetailView: View {
     // MARK: - Меню
 
     private var shareButton: some View {
-        Button { showShare = true } label: {
-            HStack(spacing: 10) {
-                Image(systemName: "sparkles")
-                Text("Поделиться поездкой")
-                Spacer()
-                Image(systemName: "chevron.right").font(.subheadline.weight(.bold))
+        HStack(spacing: 10) {
+            Button { openShare(.image) } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "sparkles")
+                    Text("Поделиться поездкой")
+                    Spacer(minLength: 0)
+                }
+                .font(.headline)
+                .foregroundStyle(.white)
+                .padding(.horizontal, 18)
+                .frame(height: 54)
+                .background(Theme.sunset, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .shadow(color: Theme.rose.opacity(0.3), radius: 12, y: 6)
             }
-            .font(.headline)
-            .foregroundStyle(.white)
-            .padding(.horizontal, 18)
-            .frame(height: 54)
-            .background(Theme.sunset, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-            .shadow(color: Theme.rose.opacity(0.3), radius: 12, y: 6)
+            .buttonStyle(PressableButtonStyle())
+
+            Button { openShare(.video) } label: {
+                VStack(spacing: 2) {
+                    Image(systemName: "play.rectangle.fill").font(.headline)
+                    Text("Видео").font(.caption2.weight(.semibold))
+                }
+                .foregroundStyle(.white)
+                .frame(width: 72, height: 54)
+                .background(Theme.violet.gradient, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .shadow(color: Theme.violet.opacity(0.3), radius: 12, y: 6)
+            }
+            .buttonStyle(PressableButtonStyle())
         }
-        .buttonStyle(PressableButtonStyle())
+    }
+
+    private func openShare(_ mode: ShareComposerView.Mode) {
+        shareMode = mode
+        showShare = true
     }
 
     @ToolbarContentBuilder
     private var menu: some ToolbarContent {
         ToolbarItem(placement: .topBarTrailing) {
-            Button { showShare = true } label: {
+            Button { openShare(.image) } label: {
                 Image(systemName: "square.and.arrow.up")
             }
         }

@@ -55,9 +55,41 @@ enum ShareService {
         return await UIApplication.shared.open(url)
     }
 
+    /// То же для видео: Instagram открывает редактор сторис с роликом на фоне.
+    static func shareVideoToInstagramStories(_ url: URL) async -> Bool {
+        guard canShareToInstagram,
+              let link = URL(string: "instagram-stories://share?source_application=\(ShareConfig.facebookAppID)"),
+              let data = try? Data(contentsOf: url) else { return false }
+
+        UIPasteboard.general.setItems(
+            [["com.instagram.sharedSticker.backgroundVideo": data]],
+            options: [.expirationDate: Date().addingTimeInterval(300)]
+        )
+        return await UIApplication.shared.open(link)
+    }
+
     // MARK: - Фото
 
     enum SaveError: Error { case denied, failed }
+
+    static func saveVideoToPhotos(_ url: URL) async throws {
+        try await requestAddAccess()
+        do {
+            try await PHPhotoLibrary.shared().performChanges {
+                _ = PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: url)
+            }
+        } catch {
+            throw SaveError.failed
+        }
+    }
+
+    private static func requestAddAccess() async throws {
+        var status = PHPhotoLibrary.authorizationStatus(for: .addOnly)
+        if status == .notDetermined {
+            status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
+        }
+        guard status == .authorized || status == .limited else { throw SaveError.denied }
+    }
 
     static func saveToPhotos(_ image: UIImage) async throws {
         var status = PHPhotoLibrary.authorizationStatus(for: .addOnly)
