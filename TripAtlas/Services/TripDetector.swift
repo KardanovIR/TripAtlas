@@ -184,4 +184,5 @@ enum SettingsKeys {
     static let maxGapHours = "maxGapHours"
     static let minPhotos = "minPhotos"
     static let cityBoundaries = "cityBoundaries"
+    static let hideUtilityPhotos = "hideUtilityPhotos"
 }

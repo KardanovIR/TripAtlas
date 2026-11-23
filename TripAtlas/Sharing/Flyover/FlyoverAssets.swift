@@ -93,7 +93,7 @@ enum FlyoverPreparation {
 
             // Фото остановки: обложка города (или поездки) + равномерно по остальным.
             let first = stop.places.count == 1 ? stop.places[0].coverAssetID : nil
-            let ids = ShareComposerModel.spread(stop.photoIDs, count: 3, first: first)
+            let ids = ShareComposerModel.pickBest(stop.photoIDs, count: 3, scores: subject.scores, first: first)
             result.append(FlyoverCity(
                 name: stop.name,
                 subtitle: stop.subtitle,

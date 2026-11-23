@@ -59,4 +59,35 @@ final class SharingTests: XCTestCase {
         XCTAssertEqual(year.place(containing: "d")?.name, "Ницца")
         XCTAssertFalse(year.timelineNumbered)
     }
+
+    func testPickBestTakesTopScoredPhotoFromEachSegment() {
+        let ids = (0..<10).map { "p\($0)" }
+        let scores: [String: Double] = ["p1": 0.9, "p3": -0.5, "p4": 0.2, "p8": 0.7, "p9": 0.1]
+        XCTAssertEqual(ShareComposerModel.pickBest(ids, count: 2, scores: scores, first: nil), ["p1", "p8"])
+        XCTAssertEqual(ShareComposerModel.pickBest(ids, count: 2, scores: scores, first: "p0").first, "p0")
+    }
+
+    @MainActor
+    func testHideAndRestoreUtilityPhotos() {
+        let day = Date(timeIntervalSince1970: 1_700_000_000)
+        var rome = Place(city: "Рим", country: "Италия", countryCode: "IT", latitude: 41.9, longitude: 12.5)
+        rome.assetIDs = ["a", "receipt", "b"]
+        rome.coverAssetID = "receipt"
+        let trip = Trip(signature: "t", title: "Рим", startDate: day, endDate: day,
+                        assetIdentifiers: ["a", "receipt", "b"],
+                        assetDates: [day, day.addingTimeInterval(60), day.addingTimeInterval(120)],
+                        coverAssetIdentifier: "receipt", route: [], places: [rome])
+        trip.photoScores = ["a": 0.1, "b": 0.8]
+
+        trip.hide(["receipt"])
+        XCTAssertEqual(trip.assetIdentifiers, ["a", "b"])
+        XCTAssertEqual(trip.coverAssetIdentifier, "b")                 // лучшее из оставшихся
+        XCTAssertEqual(trip.places[0].assetIDs, ["a", "b"])
+        XCTAssertEqual(trip.hiddenAssets.map(\.id), ["receipt"])
+
+        trip.restore(["receipt"])
+        XCTAssertEqual(trip.assetIdentifiers, ["a", "receipt", "b"])   // на своём месте по времени
+        XCTAssertEqual(trip.places[0].assetIDs?.contains("receipt"), true)
+        XCTAssertTrue(trip.hiddenAssets.isEmpty)
+    }
 }

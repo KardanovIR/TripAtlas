@@ -14,6 +14,8 @@ final class TripImporter {
     private(set) var phase: Phase = .idle
     private(set) var candidates: [TripDetector.Candidate] = []
     private(set) var creatingIDs: Set<String> = []
+    /// Поездки, в которых сейчас ищутся служебные фото.
+    private(set) var cleaningIDs: Set<String> = []
     private(set) var lastScan: Date?
 
     // MARK: - Сканирование
@@ -86,6 +88,7 @@ final class TripImporter {
         try? context.save()
         candidates.removeAll { $0.id == candidate.id }
         BoundaryStore.prefetch(places)
+        Task { await cleanUp(trip, in: context) }
     }
 
     func createAll(in context: ModelContext) async {
@@ -117,6 +120,45 @@ final class TripImporter {
             trip.removeCountry(code)
         }
         try? context.save()
+    }
+
+    // MARK: - Служебные фото
+
+    static var hidesUtilityPhotos: Bool {
+        UserDefaults.standard.object(forKey: SettingsKeys.hideUtilityPhotos) as? Bool ?? true
+    }
+
+    /// Оценивает фото поездки: прячет чеки, документы и прочие служебные снимки,
+    /// запоминает оценки красоты и делает обложкой лучшее фото.
+    func cleanUp(_ trip: Trip, in context: ModelContext) async {
+        guard !trip.photosAnalyzed, !cleaningIDs.contains(trip.signature) else { return }
+        cleaningIDs.insert(trip.signature)
+        defer { cleaningIDs.remove(trip.signature) }
+
+        let assessments = await PhotoQualityService.shared.assess(trip.assetIdentifiers)
+        guard trip.modelContext != nil else { return }   // поездку успели удалить
+
+        trip.photoScores = assessments.mapValues(\.score)
+        if Self.hidesUtilityPhotos {
+            let utility = Set(assessments.filter { $0.value.isUtility }.keys)
+            // Если служебные — вообще все фото, ничего не прячем: значит, Vision ошибся.
+            if utility.count < trip.assetIdentifiers.count { trip.hide(utility) }
+        }
+        trip.coverAssetIdentifier = trip.bestPhoto(in: trip.assetIdentifiers) ?? trip.coverAssetIdentifier
+        trip.places = trip.places.map { place in
+            var p = place
+            if let ids = p.assetIDs, !ids.isEmpty { p.coverAssetID = trip.bestPhoto(in: ids) }
+            return p
+        }
+        trip.photosAnalyzed = true
+        try? context.save()
+    }
+
+    /// Проверяет поездки, созданные до появления фильтра. По одной, в фоне.
+    func cleanUpAll(_ trips: [Trip], in context: ModelContext) async {
+        for trip in trips where !trip.photosAnalyzed {
+            await cleanUp(trip, in: context)
+        }
     }
 
     /// Удаляет поездку и запоминает её подпись, чтобы она не предлагалась снова.

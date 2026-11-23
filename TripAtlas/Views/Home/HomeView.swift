@@ -103,6 +103,8 @@ struct HomeView: View {
             .fullScreenCover(item: $recapYear) { YearShareView(year: $0.id) }
             .task {
                 if importer.lastScan == nil { await rescan() }
+                // Поездки, созданные до фильтра служебных фото, проверяются в фоне.
+                await importer.cleanUpAll(trips, in: context)
             }
             .onChange(of: scenePhase) { _, phase in
                 guard phase == .active, let last = importer.lastScan,

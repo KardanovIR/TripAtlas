@@ -30,6 +30,8 @@ struct ShareSubject {
     let timeline: [String]
     let timelineNumbered: Bool
     let stops: [Stop]
+    /// Оценки красоты фото (Vision) — чтобы брать лучшие кадры.
+    let scores: [String: Double]
 
     private let placeByAsset: [String: Place]
 
@@ -45,7 +47,7 @@ struct ShareSubject {
 
     init(kind: Kind, title: String, subtitle: String, flags: String, stats: [ShareStat], places: [Place],
          assetIDs: [String], assetDates: [String: Date], coverID: String?, timeline: [String],
-         timelineNumbered: Bool, stops: [Stop]) {
+         timelineNumbered: Bool, stops: [Stop], scores: [String: Double] = [:]) {
         self.kind = kind
         self.title = title
         self.subtitle = subtitle
@@ -58,6 +60,7 @@ struct ShareSubject {
         self.timeline = timeline
         self.timelineNumbered = timelineNumbered
         self.stops = stops
+        self.scores = scores
         var map: [String: Place] = [:]
         for place in places {
             for id in place.assetIDs ?? [] { map[id] = place }
@@ -98,7 +101,8 @@ extension ShareSubject {
             coverID: trip.coverAssetIdentifier,
             timeline: trip.places.map(\.name),
             timelineNumbered: true,
-            stops: stops
+            stops: stops,
+            scores: trip.photoScores
         )
     }
 
@@ -155,8 +159,12 @@ extension ShareSubject {
         var dates: [String: Date] = [:]
         for trip in trips { dates.merge(Self.dates(of: trip)) { a, _ in a } }
 
-        // Обложка — обложка поездки, где больше всего фото.
-        let cover = trips.max { $0.assetIdentifiers.count < $1.assetIdentifiers.count }?.coverAssetIdentifier
+        var scores: [String: Double] = [:]
+        for trip in trips { scores.merge(trip.photoScores) { a, _ in a } }
+
+        // Обложка — самое удачное фото года (или обложка самой большой поездки).
+        let cover = scores.max { $0.value < $1.value }?.key
+            ?? trips.max { $0.assetIdentifiers.count < $1.assetIdentifiers.count }?.coverAssetIdentifier
 
         let stops = trips.map { trip in
             Stop(name: trip.title,
@@ -177,7 +185,8 @@ extension ShareSubject {
             coverID: cover,
             timeline: countries.map { "\(Geo.flag(for: $0)) \(Geo.countryName(for: $0))" },
             timelineNumbered: false,
-            stops: stops
+            stops: stops,
+            scores: scores
         )
     }
 }

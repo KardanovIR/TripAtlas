@@ -24,8 +24,8 @@ final class ShareComposerModel {
 
     init(subject: ShareSubject) {
         self.subject = subject
-        candidateIDs = Self.spread(subject.assetIDs, count: 40, first: subject.coverID)
-        selectedIDs = Self.spread(candidateIDs, count: Self.maxSelection, first: subject.coverID)
+        candidateIDs = Self.pickBest(subject.assetIDs, count: 40, scores: subject.scores, first: subject.coverID)
+        selectedIDs = Self.pickBest(candidateIDs, count: Self.maxSelection, scores: subject.scores, first: subject.coverID)
     }
 
     // MARK: - Данные для карточки
@@ -121,6 +121,25 @@ final class ShareComposerModel {
     }
 
     // MARK: - Утилиты
+
+    /// Лучшие кадры, равномерно по времени: массив делится на `count` отрезков,
+    /// из каждого берётся фото с наибольшей оценкой. Без оценок — как `spread`.
+    static func pickBest(_ ids: [String], count: Int, scores: [String: Double], first: String?) -> [String] {
+        guard !scores.isEmpty, ids.count > count else { return spread(ids, count: count, first: first) }
+        var result: [String] = []
+        if let first, ids.contains(first) { result.append(first) }
+        let slots = count - result.count
+        guard slots > 0 else { return result }
+        let size = Double(ids.count) / Double(slots)
+        for slot in 0..<slots {
+            let lower = Int((Double(slot) * size).rounded(.down))
+            let upper = min(ids.count, Int((Double(slot + 1) * size).rounded(.down)))
+            guard lower < upper else { continue }
+            let chunk = ids[lower..<upper].filter { !result.contains($0) }
+            if let best = chunk.max(by: { (scores[$0] ?? -2) < (scores[$1] ?? -2) }) { result.append(best) }
+        }
+        return result
+    }
 
     /// `count` элементов, равномерно разбросанных по массиву; `first` — в начало.
     static func spread(_ ids: [String], count: Int, first: String?) -> [String] {

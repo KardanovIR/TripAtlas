@@ -22,6 +22,7 @@ struct TripDetailView: View {
     @State private var removeCandidate: RemovalTarget?
     @State private var showShare = false
     @State private var shareMode: ShareComposerView.Mode = .image
+    @State private var showHidden = false
 
     private enum RemovalTarget: Identifiable {
         case city(CityZone), country(String)
@@ -109,7 +110,11 @@ struct TripDetailView: View {
         } message: { _ in
             Text("Пропадёт с карты и из статистики. Фото останутся в поездке.")
         }
-        .task { await importer.backfillAssignments(trip, in: context) }
+        .task {
+            await importer.backfillAssignments(trip, in: context)
+            await importer.cleanUp(trip, in: context)
+        }
+        .sheet(isPresented: $showHidden) { HiddenPhotosView(trip: trip) }
         .alert("Название поездки", isPresented: $isRenaming) {
             TextField("Название", text: $draftTitle)
             Button("Сохранить") {
@@ -292,8 +297,11 @@ struct TripDetailView: View {
 
     private var photosSection: some View {
         VStack(alignment: .leading, spacing: 30) {
-            SectionTitle(title: "Фотографии", trailing: RU.photos(trip.assetIdentifiers.count))
-                .padding(.horizontal, 20)
+            VStack(alignment: .leading, spacing: 8) {
+                SectionTitle(title: "Фотографии", trailing: RU.photos(trip.assetIdentifiers.count))
+                hiddenPhotosRow
+            }
+            .padding(.horizontal, 20)
 
             LazyVStack(alignment: .leading, spacing: 30) {
                 ForEach(trip.days) { day in
@@ -314,6 +322,25 @@ struct TripDetailView: View {
     }
 
     // MARK: - Меню
+
+    @ViewBuilder
+    private var hiddenPhotosRow: some View {
+        if importer.cleaningIDs.contains(trip.signature) {
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                Text("Ищу чеки, документы и другие служебные фото…")
+            }
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+        } else if !trip.hiddenAssets.isEmpty {
+            Button { showHidden = true } label: {
+                Label("Скрыто \(trip.hiddenAssets.count) служебных фото — чеки, документы", systemImage: "eye.slash")
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+        }
+    }
 
     private var shareButton: some View {
         HStack(spacing: 10) {

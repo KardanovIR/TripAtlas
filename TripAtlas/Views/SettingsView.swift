@@ -9,6 +9,7 @@ struct SettingsView: View {
     @AppStorage(SettingsKeys.maxGapHours) private var maxGapHours: Double = 72
     @AppStorage(SettingsKeys.minPhotos) private var minPhotos: Int = 5
     @AppStorage(SettingsKeys.cityBoundaries) private var useBoundaries = true
+    @AppStorage(SettingsKeys.hideUtilityPhotos) private var hideUtility = true
 
     @Environment(BoundaryStore.self) private var boundaryStore
     @State private var clearing = false
@@ -26,6 +27,14 @@ struct SettingsView: View {
                     Text("Распознавание поездок")
                 } footer: {
                     Text("Поездкой считаются фото, снятые дальше радиуса от дома. Если между фото прошло больше указанного разрыва — это разные поездки. Изменения применяются при следующем сканировании.")
+                }
+
+                Section {
+                    Toggle("Скрывать служебные фото", isOn: $hideUtility)
+                } header: {
+                    Text("Фото")
+                } footer: {
+                    Text("Чеки, документы, фото экранов и досок не попадают в поездки, карточки и видео. Распознаются на устройстве (Vision), скрытые фото можно вернуть на странице поездки. Скриншоты не учитываются никогда. Действует для новых поездок.")
                 }
 
                 Section {
