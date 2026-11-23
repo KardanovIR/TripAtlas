@@ -1,4 +1,4 @@
-.PHONY: setup project open test clean
+.PHONY: setup project open test clean agent
 
 # Симулятор для тестов: make test SIM="iPhone 16 Pro"
 SIM ?= iPhone 17
@@ -28,3 +28,8 @@ test: project
 
 clean:
 	rm -rf TripAtlas.xcodeproj DerivedData build
+
+# Агент сборки для Claude: собирает проект по запросу и пишет ошибки в .agent/.
+agent:
+	@command -v xcodegen >/dev/null || brew install xcodegen
+	@bash Scripts/build-agent.sh

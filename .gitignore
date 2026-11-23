@@ -15,3 +15,6 @@ Config/Local.xcconfig
 # Swift Package Manager
 .swiftpm/
 .build/
+
+# Агент сборки (лог, запросы, DerivedData)
+.agent/
