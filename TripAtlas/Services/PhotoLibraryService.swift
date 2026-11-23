@@ -24,6 +24,8 @@ enum PhotoLibraryService {
         var samples: [PhotoSample] = []
         samples.reserveCapacity(result.count / 2)
         result.enumerateObjects { asset, _, _ in
+            // Скриншоты — не фото из поездки, даже если у них есть геометка.
+            guard !asset.mediaSubtypes.contains(.photoScreenshot) else { return }
             guard let location = asset.location else { return }
             let c = location.coordinate
             guard CLLocationCoordinate2DIsValid(c), !(c.latitude == 0 && c.longitude == 0) else { return }

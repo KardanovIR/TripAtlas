@@ -14,6 +14,7 @@ struct HomeView: View {
 
     @State private var showSuggestions = false
     @State private var showSettings = false
+    @State private var recapYear: RecapYear?
     @State private var countryToRemove: String?
     @State private var heroPosition: MapCameraPosition = .automatic
     @Namespace private var transition
@@ -36,6 +37,11 @@ struct HomeView: View {
                     VStack(alignment: .leading, spacing: 32) {
                         StatsPanel(stats: stats, transition: transition)
                             .padding(.top, -52)
+
+                        if let year = bannerYear {
+                            yearBanner(year)
+                                .padding(.top, -12)
+                        }
 
                         if !stats.countryCodes.isEmpty { countriesSection }
 
@@ -94,8 +100,11 @@ struct HomeView: View {
             }
             .sheet(isPresented: $showSuggestions) { SuggestionsView() }
             .sheet(isPresented: $showSettings) { SettingsView() }
+            .fullScreenCover(item: $recapYear) { YearShareView(year: $0.id) }
             .task {
                 if importer.lastScan == nil { await rescan() }
+                // Поездки, созданные до фильтра служебных фото, проверяются в фоне.
+                await importer.cleanUpAll(trips, in: context)
             }
             .onChange(of: scenePhase) { _, phase in
                 guard phase == .active, let last = importer.lastScan,
@@ -254,6 +263,28 @@ struct HomeView: View {
         default:
             EmptyView()
         }
+    }
+
+    // MARK: - Итоги года
+
+    private struct RecapYear: Identifiable { let id: Int }
+
+    /// Текущий год, если в нём были поездки, иначе последний год с поездками.
+    private var bannerYear: Int? {
+        let years = ShareSubject.years(in: trips)
+        let current = Calendar.current.component(.year, from: .now)
+        return years.contains(current) ? current : years.first
+    }
+
+    private func yearBanner(_ year: Int) -> some View {
+        let yearTrips: [Trip] = trips.filter { (trip: Trip) -> Bool in
+            Calendar.current.component(.year, from: trip.startDate) == year
+        }
+        let countries: Int = Set(yearTrips.flatMap { (trip: Trip) -> [String] in trip.countryCodes }).count
+        return Button { recapYear = RecapYear(id: year) } label: {
+            YearRecapBanner(year: year, trips: yearTrips.count, countries: countries)
+        }
+        .buttonStyle(PressableButtonStyle())
     }
 
     private func rescan() async {

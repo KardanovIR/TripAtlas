@@ -66,6 +66,12 @@ final class Trip {
     var route: [RoutePoint]
     var places: [Place]
     var createdAt: Date
+    /// Служебные фото (чеки, документы, скриншоты), убранные из поездки. Их можно вернуть.
+    var hiddenAssets: [HiddenAsset] = []
+    /// Эстетическая оценка фото (Vision): -1…1. По ней выбираются лучшие кадры для шеринга.
+    var photoScores: [String: Double] = [:]
+    /// Фото уже проверены на служебные.
+    var photosAnalyzed = false
 
     init(signature: String,
          title: String,
@@ -153,6 +159,77 @@ extension Trip {
         place.photoCount = remaining.count
         if place.coverAssetID == assetID { place.coverAssetID = remaining[remaining.count / 2] }
         places[index] = place
+    }
+}
+
+// MARK: - Служебные фото
+
+/// Скрытое фото: запоминаем дату и город, чтобы вернуть его на место.
+struct HiddenAsset: Codable, Hashable {
+    var id: String
+    var date: Date?
+    var placeID: String?
+}
+
+extension Trip {
+    /// Убирает фото из поездки (из ленты, городов и обложки), запоминая их для возврата.
+    func hide(_ ids: Set<String>) {
+        guard !ids.isEmpty else { return }
+        let datesByID = assetDates.count == assetIdentifiers.count
+            ? Dictionary(zip(assetIdentifiers, assetDates), uniquingKeysWith: { a, _ in a }) : [:]
+
+        for id in assetIdentifiers where ids.contains(id) {
+            hiddenAssets.append(HiddenAsset(id: id, date: datesByID[id], placeID: place(containing: id)?.id))
+        }
+        if assetDates.count == assetIdentifiers.count {
+            let kept = zip(assetIdentifiers, assetDates).filter { !ids.contains($0.0) }
+            assetIdentifiers = kept.map { $0.0 }
+            assetDates = kept.map { $0.1 }
+        } else {
+            assetIdentifiers.removeAll { ids.contains($0) }
+        }
+        places = places.map { place in
+            var p = place
+            guard let assets = p.assetIDs else { return p }
+            let remaining = assets.filter { !ids.contains($0) }
+            guard remaining.count != assets.count else { return p }
+            p.assetIDs = remaining
+            p.photoCount = remaining.count
+            if let cover = p.coverAssetID, ids.contains(cover) { p.coverAssetID = bestPhoto(in: remaining) }
+            return p
+        }
+        if let cover = coverAssetIdentifier, ids.contains(cover) {
+            coverAssetIdentifier = bestPhoto(in: assetIdentifiers)
+        }
+    }
+
+    /// Возвращает скрытые фото в поездку и в их города.
+    func restore(_ ids: Set<String>) {
+        let returning = hiddenAssets.filter { ids.contains($0.id) }
+        guard !returning.isEmpty else { return }
+        hiddenAssets.removeAll { ids.contains($0.id) }
+
+        if assetDates.count == assetIdentifiers.count && returning.allSatisfy({ $0.date != nil }) {
+            var pairs = Array(zip(assetIdentifiers, assetDates))
+            pairs += returning.map { ($0.id, $0.date!) }
+            pairs.sort { $0.1 < $1.1 }
+            assetIdentifiers = pairs.map { $0.0 }
+            assetDates = pairs.map { $0.1 }
+        } else {
+            assetIdentifiers += returning.map(\.id)
+        }
+        for asset in returning {
+            guard let placeID = asset.placeID, let index = places.firstIndex(where: { $0.id == placeID }) else { continue }
+            places[index].assetIDs = (places[index].assetIDs ?? []) + [asset.id]
+            places[index].photoCount = places[index].assetIDs?.count
+        }
+    }
+
+    /// Самое удачное фото по оценке Vision; без оценок — среднее по порядку.
+    func bestPhoto(in ids: [String]) -> String? {
+        let scored = ids.compactMap { id in photoScores[id].map { (id, $0) } }
+        if let best = scored.max(by: { $0.1 < $1.1 }) { return best.0 }
+        return ids.isEmpty ? nil : ids[ids.count / 2]
     }
 }
 

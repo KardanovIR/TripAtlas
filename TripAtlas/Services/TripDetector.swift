@@ -137,6 +137,13 @@ struct HomeResolver {
 
     var hasAnyHome: Bool { global != nil }
 
+    /// Дом для каждого года, где он известен (свой или общий).
+    func homes(for years: Set<Int>) -> [Int: Coordinate] {
+        var result: [Int: Coordinate] = [:]
+        for year in years { result[year] = byYear[year] ?? global }
+        return result
+    }
+
     init(samples: [PhotoSample], config: TripDetector.Config) {
         global = Self.home(in: samples, cell: config.homeCellDegrees, minDays: 1)
         let groups = Dictionary(grouping: samples) { Calendar.current.component(.year, from: $0.date) }
@@ -177,4 +184,5 @@ enum SettingsKeys {
     static let maxGapHours = "maxGapHours"
     static let minPhotos = "minPhotos"
     static let cityBoundaries = "cityBoundaries"
+    static let hideUtilityPhotos = "hideUtilityPhotos"
 }

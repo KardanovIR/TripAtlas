@@ -20,6 +20,9 @@ struct TripDetailView: View {
     @State private var contentWidth: CGFloat = 0
     @State private var openedZone: CityZone?
     @State private var removeCandidate: RemovalTarget?
+    @State private var showShare = false
+    @State private var shareMode: ShareComposerView.Mode = .image
+    @State private var showHidden = false
 
     private enum RemovalTarget: Identifiable {
         case city(CityZone), country(String)
@@ -49,6 +52,9 @@ struct TripDetailView: View {
                     statsPanel
                         .padding(.top, -50)
 
+                    shareButton
+                        .padding(.top, -14)
+
                     if !zones.isEmpty {
                         mapSection
                         citiesSection
@@ -70,6 +76,9 @@ struct TripDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar { menu }
+        .fullScreenCover(isPresented: $showShare) {
+            ShareComposerView(trip: trip, mode: shareMode)
+        }
         .fullScreenCover(item: $viewerStart) { selection in
             PhotoViewer(assetIDs: trip.assetIdentifiers, index: selection.id, trip: trip)
         }
@@ -101,7 +110,11 @@ struct TripDetailView: View {
         } message: { _ in
             Text("Пропадёт с карты и из статистики. Фото останутся в поездке.")
         }
-        .task { await importer.backfillAssignments(trip, in: context) }
+        .task {
+            await importer.backfillAssignments(trip, in: context)
+            await importer.cleanUp(trip, in: context)
+        }
+        .sheet(isPresented: $showHidden) { HiddenPhotosView(trip: trip) }
         .alert("Название поездки", isPresented: $isRenaming) {
             TextField("Название", text: $draftTitle)
             Button("Сохранить") {
@@ -284,8 +297,11 @@ struct TripDetailView: View {
 
     private var photosSection: some View {
         VStack(alignment: .leading, spacing: 30) {
-            SectionTitle(title: "Фотографии", trailing: RU.photos(trip.assetIdentifiers.count))
-                .padding(.horizontal, 20)
+            VStack(alignment: .leading, spacing: 8) {
+                SectionTitle(title: "Фотографии", trailing: RU.photos(trip.assetIdentifiers.count))
+                hiddenPhotosRow
+            }
+            .padding(.horizontal, 20)
 
             LazyVStack(alignment: .leading, spacing: 30) {
                 ForEach(trip.days) { day in
@@ -307,7 +323,68 @@ struct TripDetailView: View {
 
     // MARK: - Меню
 
+    @ViewBuilder
+    private var hiddenPhotosRow: some View {
+        if importer.cleaningIDs.contains(trip.signature) {
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                Text("Ищу чеки, документы и другие служебные фото…")
+            }
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+        } else if !trip.hiddenAssets.isEmpty {
+            Button { showHidden = true } label: {
+                Label("Скрыто \(trip.hiddenAssets.count) служебных фото — чеки, документы", systemImage: "eye.slash")
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private var shareButton: some View {
+        HStack(spacing: 10) {
+            Button { openShare(.image) } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "sparkles")
+                    Text("Поделиться поездкой")
+                    Spacer(minLength: 0)
+                }
+                .font(.headline)
+                .foregroundStyle(.white)
+                .padding(.horizontal, 18)
+                .frame(height: 54)
+                .background(Theme.sunset, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .shadow(color: Theme.rose.opacity(0.3), radius: 12, y: 6)
+            }
+            .buttonStyle(PressableButtonStyle())
+
+            Button { openShare(.video) } label: {
+                VStack(spacing: 2) {
+                    Image(systemName: "play.rectangle.fill").font(.headline)
+                    Text("Видео").font(.caption2.weight(.semibold))
+                }
+                .foregroundStyle(.white)
+                .frame(width: 72, height: 54)
+                .background(Theme.violet.gradient, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .shadow(color: Theme.violet.opacity(0.3), radius: 12, y: 6)
+            }
+            .buttonStyle(PressableButtonStyle())
+        }
+    }
+
+    private func openShare(_ mode: ShareComposerView.Mode) {
+        shareMode = mode
+        showShare = true
+    }
+
+    @ToolbarContentBuilder
     private var menu: some ToolbarContent {
+        ToolbarItem(placement: .topBarTrailing) {
+            Button { openShare(.image) } label: {
+                Image(systemName: "square.and.arrow.up")
+            }
+        }
         ToolbarItem(placement: .topBarTrailing) {
             Menu {
                 Button("Переименовать", systemImage: "pencil") {
