@@ -240,7 +240,7 @@ struct FlyoverPanel: View {
 
     private func openActivity() {
         guard let url = model.videoURL else { return }
-        activityItems = [url, ShareService.caption(for: model.trip.title)]
+        activityItems = [url, ShareService.caption(for: model.subject.shareTitle)]
     }
 
     private func showToast(_ text: String) {

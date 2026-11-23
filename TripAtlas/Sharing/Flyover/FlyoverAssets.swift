@@ -19,61 +19,70 @@ struct FlyoverAssets {
 /// Текстовая часть ролика.
 struct FlyoverInfo {
     let title: String
-    let dateText: String
+    let subtitle: String
     let flags: String
-    let days: Int
-    let cityCount: Int
-    let photoCount: Int
-    let distanceKm: Int
+    let stats: [ShareStat]
 }
 
 @MainActor
 enum FlyoverPreparation {
 
-    /// Города поездки для ролика: не больше 6 (где больше всего фото), в порядке посещения.
-    static func cities(for trip: Trip) async -> [FlyoverCity] {
-        var places = trip.places
-        if places.count > FlyoverScript.maxCities {
-            let keep = Set(places.sorted { ($0.assetIDs?.count ?? 0) > ($1.assetIDs?.count ?? 0) }
-                .prefix(FlyoverScript.maxCities).map(\.id))
-            places = places.filter { keep.contains($0.id) }
-        }
-
-        var dates: [String: Date] = [:]
-        if trip.assetDates.count == trip.assetIdentifiers.count {
-            for (id, date) in zip(trip.assetIdentifiers, trip.assetDates) { dates[id] = date }
+    /// Остановки ролика в хронологическом порядке. Если их слишком много —
+    /// оставляем те, где больше всего фото.
+    static func stops(for subject: ShareSubject) async -> [FlyoverCity] {
+        let limit = subject.kind == .trip ? FlyoverScript.maxCities : FlyoverScript.maxTrips
+        var stops = subject.stops.filter { !$0.places.isEmpty }
+        if stops.count > limit {
+            let ranked = stops.enumerated().sorted { $0.element.photoIDs.count > $1.element.photoIDs.count }
+            let keep = Set(ranked.prefix(limit).map(\.offset))
+            stops = stops.enumerated().filter { keep.contains($0.offset) }.map(\.element)
         }
 
         var result: [FlyoverCity] = []
-        for (index, place) in places.enumerated() {
+        for (index, stop) in stops.enumerated() {
             var rings: [[CGPoint]] = []
-            if BoundaryStore.isEnabled,
-               case .found(let boundary) = await CityBoundaryService.shared.boundary(
-                   key: place.id, latitude: place.latitude, longitude: place.longitude) {
-                for polygon in boundary.polygons {
-                    rings.append(polygon.outer.map { Mercator.project($0) })
-                    rings.append(contentsOf: polygon.holes.map { ring in ring.map { Mercator.project($0) } })
+            var circles: [FlyoverCircle] = []
+            var weightedX = 0.0, weightedY = 0.0, weight = 0.0
+
+            for place in stop.places {
+                let center = Mercator.project(latitude: place.latitude, longitude: place.longitude)
+                let w = Double(max(place.assetIDs?.count ?? place.photoCount ?? 1, 1))
+                weightedX += Double(center.x) * w
+                weightedY += Double(center.y) * w
+                weight += w
+
+                if BoundaryStore.isEnabled,
+                   case .found(let boundary) = await CityBoundaryService.shared.boundary(
+                       key: place.id, latitude: place.latitude, longitude: place.longitude) {
+                    for polygon in boundary.polygons {
+                        rings.append(polygon.outer.map { Mercator.project($0) })
+                        rings.append(contentsOf: polygon.holes.map { ring in ring.map { Mercator.project($0) } })
+                    }
+                } else {
+                    circles.append(FlyoverCircle(center: center,
+                                                 radius: Mercator.units(km: place.radiusKm ?? 3, latitude: place.latitude)))
                 }
             }
-            let ids = ShareComposerModel.spread(place.assetIDs ?? [], count: 3, first: place.coverAssetID)
+
+            // Фото остановки: обложка города (или поездки) + равномерно по остальным.
+            let first = stop.places.count == 1 ? stop.places[0].coverAssetID : nil
+            let ids = ShareComposerModel.spread(stop.photoIDs, count: 3, first: first)
             result.append(FlyoverCity(
-                name: place.name,
-                countryCode: place.countryCode,
+                name: stop.name,
+                subtitle: stop.subtitle,
                 order: index + 1,
-                center: Mercator.project(latitude: place.latitude, longitude: place.longitude),
+                center: CGPoint(x: weightedX / weight, y: weightedY / weight),
                 rings: rings,
-                radius: Mercator.units(km: place.radiusKm ?? 3, latitude: place.latitude),
+                circles: circles,
                 photoIDs: ids,
-                photoDates: ids.map { dates[$0] }
+                photoDates: ids.map { subject.assetDates[$0] }
             ))
         }
         return result
     }
 
-    static func info(for trip: Trip) -> FlyoverInfo {
-        FlyoverInfo(title: trip.title, dateText: trip.dateRangeText, flags: trip.flags,
-                    days: trip.dayCount, cityCount: trip.cityKeys.count,
-                    photoCount: trip.assetIdentifiers.count, distanceKm: Int(trip.distanceKm.rounded()))
+    static func info(for subject: ShareSubject) -> FlyoverInfo {
+        FlyoverInfo(title: subject.title, subtitle: subject.subtitle, flags: subject.flags, stats: subject.stats)
     }
 
     /// Снимки карты и фото. `progress` — от 0 до 1.

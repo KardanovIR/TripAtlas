@@ -6,7 +6,7 @@ import Observation
 @Observable
 @MainActor
 final class ShareComposerModel {
-    let trip: Trip
+    let subject: ShareSubject
 
     var template: ShareTemplate = .poster
     var options = ShareOptions()
@@ -22,27 +22,24 @@ final class ShareComposerModel {
 
     static let maxSelection = 5
 
-    init(trip: Trip) {
-        self.trip = trip
-        candidateIDs = Self.spread(trip.assetIdentifiers, count: 40, first: trip.coverAssetIdentifier)
-        let defaults = Self.spread(candidateIDs, count: Self.maxSelection, first: trip.coverAssetIdentifier)
-        selectedIDs = defaults
+    init(subject: ShareSubject) {
+        self.subject = subject
+        candidateIDs = Self.spread(subject.assetIDs, count: 40, first: subject.coverID)
+        selectedIDs = Self.spread(candidateIDs, count: Self.maxSelection, first: subject.coverID)
     }
 
     // MARK: - Данные для карточки
 
     var data: ShareCardData {
         let photos: [UIImage] = selectedIDs.compactMap { images[$0] }
-        let captions: [String] = selectedIDs.filter { images[$0] != nil }.map { trip.place(containing: $0)?.name ?? "" }
+        let captions: [String] = selectedIDs.filter { images[$0] != nil }.map { subject.place(containing: $0)?.name ?? "" }
         return ShareCardData(
-            title: trip.title,
-            dateText: trip.dateRangeText,
-            flags: trip.flags,
-            days: trip.dayCount,
-            cityCount: trip.cityKeys.count,
-            photoCount: trip.assetIdentifiers.count,
-            distanceKm: Int(trip.distanceKm.rounded()),
-            cities: trip.places.map(\.name),
+            title: subject.title,
+            dateText: subject.subtitle,
+            flags: subject.flags,
+            stats: subject.stats,
+            timeline: subject.timeline,
+            timelineNumbered: subject.timelineNumbered,
             photos: photos,
             captions: captions,
             map: mapImage,
@@ -100,19 +97,27 @@ final class ShareComposerModel {
     private func loadMapAndSilhouettes() async {
         var zones: [MapSnapshotRenderer.Zone] = []
         var shapes: [ShareSilhouette] = []
-        for (index, place) in trip.places.enumerated() {
+        // Силуэты — у городов, где больше всего фото (для года их может быть много).
+        let silhouetteIDs = Set(subject.places
+            .sorted { ($0.assetIDs?.count ?? 0) > ($1.assetIDs?.count ?? 0) }
+            .prefix(4).map(\.id))
+
+        for (index, place) in subject.places.enumerated() {
             var boundary: CityBoundary?
             if BoundaryStore.isEnabled,
                case .found(let b) = await CityBoundaryService.shared.boundary(
                    key: place.id, latitude: place.latitude, longitude: place.longitude) {
                 boundary = b
-                let rings = SilhouetteBuilder.normalize(b)
-                if !rings.isEmpty { shapes.append(ShareSilhouette(id: place.id, name: place.name, rings: rings)) }
+                if silhouetteIDs.contains(place.id) {
+                    let rings = SilhouetteBuilder.normalize(b)
+                    if !rings.isEmpty { shapes.append(ShareSilhouette(id: place.id, name: place.name, rings: rings)) }
+                }
             }
             zones.append(.init(place: place, boundary: boundary, order: index + 1))
         }
         silhouettes = shapes
-        mapImage = await MapSnapshotRenderer.render(zones: zones, size: CGSize(width: 312, height: 300), dark: true)
+        mapImage = await MapSnapshotRenderer.render(zones: zones, size: CGSize(width: 312, height: 300), dark: true,
+                                                    numbered: subject.timelineNumbered)
     }
 
     // MARK: - Утилиты

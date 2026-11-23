@@ -32,18 +32,24 @@ struct ShareSilhouette: Identifiable {
     let rings: [[CGPoint]]
 }
 
+/// Одна цифра на карточке: «12 · городов».
+struct ShareStat: Hashable {
+    let value: String
+    let label: String
+}
+
 /// Всё, что нужно карточке. Картинки уже загружены — `ImageRenderer`
 /// не умеет ждать асинхронную загрузку.
 struct ShareCardData {
     var title: String
+    /// Даты поездки или подпись («Мой год в путешествиях»).
     var dateText: String
     var flags: String
-    var days: Int
-    var cityCount: Int
-    var photoCount: Int
-    var distanceKm: Int
-    /// Города в порядке посещения.
-    var cities: [String]
+    var stats: [ShareStat]
+    /// Список под картой: города поездки или страны года.
+    var timeline: [String]
+    /// Нумеровать список (города по порядку) или ставить точки (страны года).
+    var timelineNumbered: Bool
     /// Выбранные фото; первое — обложка.
     var photos: [UIImage]
     /// Подписи к фото (город съёмки), параллельно `photos`.

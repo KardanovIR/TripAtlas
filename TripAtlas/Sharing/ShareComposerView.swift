@@ -24,14 +24,27 @@ struct ShareComposerView: View {
         let items: [Any]
     }
 
-    init(trip: Trip, mode: Mode = .image) {
-        _model = State(initialValue: ShareComposerModel(trip: trip))
+    /// Дополнительная строка над превью (например, выбор года).
+    private let header: AnyView?
+    private let onModeChange: (Mode) -> Void
+
+    init(subject: ShareSubject, mode: Mode = .image, header: AnyView? = nil,
+         onModeChange: @escaping (Mode) -> Void = { _ in }) {
+        _model = State(initialValue: ShareComposerModel(subject: subject))
         _mode = State(initialValue: mode)
+        self.header = header
+        self.onModeChange = onModeChange
+    }
+
+    @MainActor
+    init(trip: Trip, mode: Mode = .image) {
+        self.init(subject: .trip(trip), mode: mode)
     }
 
     var body: some View {
         NavigationStack {
-            Group {
+            VStack(spacing: 0) {
+                if let header { header.padding(.top, 8) }
                 switch mode {
                 case .image:
                     VStack(spacing: 18) {
@@ -61,7 +74,8 @@ struct ShareComposerView: View {
                 }
             }
             .onChange(of: mode, initial: true) { _, new in
-                if new == .video, flyover == nil { flyover = FlyoverModel(trip: model.trip) }
+                if new == .video, flyover == nil { flyover = FlyoverModel(subject: model.subject) }
+                onModeChange(new)
             }
             .onDisappear { flyover?.cancel() }
             .overlay(alignment: .top) { toastView }
@@ -324,8 +338,8 @@ struct ShareComposerView: View {
 
     private func openActivity(image: UIImage? = nil) {
         guard let image = image ?? renderCurrent() else { return showToast("Не удалось создать картинку") }
-        let file: Any = ShareService.temporaryFile(for: image, name: model.trip.title) ?? image
-        activityItems = ActivityItems(items: [file, ShareService.caption(for: model.trip.title)])
+        let file: Any = ShareService.temporaryFile(for: image, name: model.subject.shareTitle) ?? image
+        activityItems = ActivityItems(items: [file, ShareService.caption(for: model.subject.shareTitle)])
     }
 
     private func showToast(_ text: String) {

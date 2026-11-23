@@ -143,19 +143,18 @@ final class FlyoverRenderer {
 
     private func zonePath(_ city: FlyoverCity, view: CGRect) -> UIBezierPath {
         let path = UIBezierPath()
-        if city.rings.isEmpty {
-            let c = screen(city.center, view)
-            let r = max(CGFloat(city.radius) / view.width * W, 10)
+        for circle in city.circles {
+            let c = screen(circle.center, view)
+            let r = max(CGFloat(circle.radius) / view.width * W, 10)
             path.append(UIBezierPath(ovalIn: CGRect(x: c.x - r, y: c.y - r, width: 2 * r, height: 2 * r)))
-        } else {
-            for ring in city.rings {
-                guard let first = ring.first else { continue }
-                path.move(to: screen(first, view))
-                for p in ring.dropFirst() { path.addLine(to: screen(p, view)) }
-                path.close()
-            }
-            path.usesEvenOddFillRule = true
         }
+        for ring in city.rings {
+            guard let first = ring.first else { continue }
+            path.move(to: screen(first, view))
+            for p in ring.dropFirst() { path.addLine(to: screen(p, view)) }
+            path.close()
+        }
+        path.usesEvenOddFillRule = true
         return path
     }
 
@@ -240,9 +239,10 @@ final class FlyoverRenderer {
         var y: CGFloat = 1200 + shift
         y += text(info.flags, font: .systemFont(ofSize: 78), alpha: alpha, at: CGPoint(x: W / 2, y: y),
                   align: .center, maxWidth: 960).height + 14
-        y += text(info.title, font: fitted(info.title, base: 112, min: 64, maxWidth: 940, serif: true), alpha: alpha,
+        let titleSize: CGFloat = info.title.count <= 6 ? 220 : 112
+        y += text(info.title, font: fitted(info.title, base: titleSize, min: 64, maxWidth: 940, serif: true), alpha: alpha,
                   at: CGPoint(x: W / 2, y: y), align: .center, maxWidth: 940).height + 14
-        text(info.dateText.uppercased(), font: Fonts.system(36, .semibold), alpha: alpha * 0.85,
+        text(info.subtitle.uppercased(), font: Fonts.system(36, .semibold), alpha: alpha * 0.85,
              at: CGPoint(x: W / 2, y: y), align: .center, maxWidth: 960, kern: 3)
     }
 
@@ -264,9 +264,8 @@ final class FlyoverRenderer {
         }
         y += text(city.name, font: fitted(city.name, base: 108, min: 56, maxWidth: 960, serif: true), alpha: alpha,
                   at: CGPoint(x: x, y: y)).height + 4
-        if let code = city.countryCode {
-            text("\(Geo.flag(for: code))  \(Geo.countryName(for: code))", font: Fonts.system(40, .semibold),
-                 alpha: alpha * 0.9, at: CGPoint(x: x, y: y))
+        if let subtitle = city.subtitle, !subtitle.isEmpty {
+            text(subtitle, font: Fonts.system(40, .semibold), alpha: alpha * 0.9, at: CGPoint(x: x, y: y))
         }
     }
 
@@ -350,18 +349,15 @@ final class FlyoverRenderer {
         let shift = CGFloat(1 - alpha) * 50
 
         var y: CGFloat = 1120 + shift
-        y += text(info.title, font: fitted(info.title, base: 86, min: 52, maxWidth: 940, serif: true), alpha: alpha,
+        let titleSize: CGFloat = info.title.count <= 6 ? 160 : 86
+        y += text(info.title, font: fitted(info.title, base: titleSize, min: 52, maxWidth: 940, serif: true), alpha: alpha,
                   at: CGPoint(x: W / 2, y: y), align: .center, maxWidth: 940).height + 8
-        y += text(info.dateText, font: Fonts.system(34, .semibold), alpha: alpha * 0.8,
+        y += text(info.subtitle, font: Fonts.system(34, .semibold), alpha: alpha * 0.8,
                   at: CGPoint(x: W / 2, y: y), align: .center, maxWidth: 960).height + 34
 
         // Цифры поездки.
-        var items: [(String, String)] = [
-            ("\(info.days)", RU.word(info.days, "день", "дня", "дней")),
-            ("\(info.cityCount)", RU.word(info.cityCount, "город", "города", "городов")),
-            ("\(info.photoCount)", "фото"),
-        ]
-        if info.distanceKm >= 10 { items.append((info.distanceKm.formatted(), "км")) }
+        let items: [(String, String)] = info.stats.prefix(4).map { ($0.value, $0.label) }
+        guard !items.isEmpty else { return }
 
         let panel = CGRect(x: 60, y: y, width: W - 120, height: 176)
         UIColor.white.withAlphaComponent(CGFloat(0.14 * alpha)).setFill()

@@ -54,7 +54,7 @@ private struct PosterCard: View {
                 }
 
                 Text(data.title)
-                    .font(.system(size: 44, weight: .bold, design: .serif))
+                    .font(.system(size: data.title.count <= 6 ? 112 : 44, weight: .bold, design: .serif))
                     .lineLimit(3)
                     .minimumScaleFactor(0.5)
                     .shadow(color: .black.opacity(0.3), radius: 8)
@@ -99,7 +99,7 @@ private struct CollageCard: View {
                 }
 
                 Text(data.title)
-                    .font(.system(size: 36, weight: .bold, design: .serif))
+                    .font(.system(size: data.title.count <= 6 ? 72 : 36, weight: .bold, design: .serif))
                     .lineLimit(2)
                     .minimumScaleFactor(0.6)
                     .padding(.top, 18)
@@ -220,7 +220,7 @@ private struct MapCard: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(data.title)
-                        .font(.system(size: 30, weight: .bold, design: .serif))
+                        .font(.system(size: data.title.count <= 6 ? 56 : 30, weight: .bold, design: .serif))
                         .lineLimit(2)
                         .minimumScaleFactor(0.6)
                     if options.showDates {
@@ -230,7 +230,7 @@ private struct MapCard: View {
                     }
                 }
 
-                CityTimeline(cities: data.cities)
+                CityTimeline(cities: data.timeline, numbered: data.timelineNumbered)
 
                 Spacer(minLength: 0)
 
@@ -247,6 +247,7 @@ private struct MapCard: View {
 /// «1 Рим → 2 Флоренция → 3 Венеция» в две колонки.
 private struct CityTimeline: View {
     let cities: [String]
+    var numbered = true
 
     private var shown: [String] { Array(cities.prefix(cities.count > 4 ? 3 : 4)) }
 
@@ -255,10 +256,12 @@ private struct CityTimeline: View {
                   alignment: .leading, spacing: 8) {
             ForEach(Array(shown.enumerated()), id: \.offset) { index, name in
                 HStack(spacing: 8) {
-                    Text("\(index + 1)")
-                        .font(.system(size: 11, weight: .bold, design: .rounded))
-                        .frame(width: 20, height: 20)
-                        .background(Circle().fill(MapSnapshotRenderer.zoneColor(index + 1)))
+                    if numbered {
+                        Text("\(index + 1)")
+                            .font(.system(size: 11, weight: .bold, design: .rounded))
+                            .frame(width: 20, height: 20)
+                            .background(Circle().fill(MapSnapshotRenderer.zoneColor(index + 1)))
+                    }
                     Text(name)
                         .font(.system(size: 14, weight: .semibold))
                         .lineLimit(1)
@@ -319,15 +322,7 @@ struct BrandPill: View {
 struct StatsStrip: View {
     let data: ShareCardData
 
-    private var items: [(String, String)] {
-        var result = [
-            ("\(data.days)", RU.word(data.days, "день", "дня", "дней")),
-            ("\(data.cityCount)", RU.word(data.cityCount, "город", "города", "городов")),
-            ("\(data.photoCount)", "фото"),
-        ]
-        if data.distanceKm >= 10 { result.append((data.distanceKm.formatted(), "км")) }
-        return result
-    }
+    private var items: [(String, String)] { data.stats.prefix(4).map { ($0.value, $0.label) } }
 
     var body: some View {
         HStack(spacing: 0) {

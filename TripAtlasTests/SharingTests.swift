@@ -26,4 +26,37 @@ final class SharingTests: XCTestCase {
         XCTAssertEqual(Set(picked).count, 5)
         XCTAssertEqual(ShareComposerModel.spread(["a", "b"], count: 5, first: nil), ["a", "b"])
     }
+
+    @MainActor
+    func testYearSubjectAggregatesTripsOfThatYear() {
+        let cal = Calendar.current
+        func date(_ y: Int, _ m: Int) -> Date { cal.date(from: DateComponents(year: y, month: m, day: 10))! }
+        func place(_ city: String, _ code: String, _ ids: [String]) -> Place {
+            var p = Place(city: city, country: nil, countryCode: code, latitude: 41.9, longitude: 12.5)
+            p.assetIDs = ids
+            return p
+        }
+        func trip(_ sig: String, _ start: Date, _ places: [Place]) -> Trip {
+            let ids = places.flatMap { $0.assetIDs ?? [] }
+            return Trip(signature: sig, title: sig, startDate: start, endDate: start.addingTimeInterval(2 * 86_400),
+                        assetIdentifiers: ids, assetDates: ids.map { _ in start }, coverAssetIdentifier: ids.first,
+                        route: [], places: places)
+        }
+        let trips = [
+            trip("Рим", date(2026, 5), [place("Рим", "IT", ["a", "b"])]),
+            trip("Снова Рим", date(2026, 9), [place("Рим", "IT", ["c"]), place("Ницца", "FR", ["d"])]),
+            trip("Токио", date(2025, 4), [place("Токио", "JP", ["e"])]),
+        ]
+
+        XCTAssertEqual(ShareSubject.years(in: trips), [2026, 2025])
+
+        let year = ShareSubject.year(2026, trips: trips)
+        XCTAssertEqual(year.title, "2026")
+        XCTAssertEqual(year.stops.map(\.name), ["Рим", "Снова Рим"])
+        XCTAssertEqual(year.places.map(\.name), ["Рим", "Ницца"])          // Рим — одна зона
+        XCTAssertEqual(year.places.first?.assetIDs, ["a", "b", "c"])
+        XCTAssertEqual(year.stats.map(\.value), ["2", "2", "2", "6"])       // поездки, страны, города, дни
+        XCTAssertEqual(year.place(containing: "d")?.name, "Ницца")
+        XCTAssertFalse(year.timelineNumbered)
+    }
 }

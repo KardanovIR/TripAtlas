@@ -4,9 +4,10 @@ import XCTest
 final class FlyoverTests: XCTestCase {
 
     private func city(_ name: String, _ lat: Double, _ lon: Double, order: Int) -> FlyoverCity {
-        FlyoverCity(name: name, countryCode: "IT", order: order,
-                    center: Mercator.project(latitude: lat, longitude: lon), rings: [],
-                    radius: Mercator.units(km: 4, latitude: lat), photoIDs: [], photoDates: [])
+        let center = Mercator.project(latitude: lat, longitude: lon)
+        return FlyoverCity(name: name, subtitle: "🇮🇹 Италия", order: order, center: center, rings: [],
+                           circles: [FlyoverCircle(center: center, radius: Mercator.units(km: 4, latitude: lat))],
+                           photoIDs: [], photoDates: [])
     }
 
     private var italy: [FlyoverCity] {

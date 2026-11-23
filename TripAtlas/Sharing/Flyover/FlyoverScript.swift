@@ -59,24 +59,36 @@ struct FlyCamera: Equatable {
 
 // MARK: - Сценарий
 
+/// Круг вместо границы (если её нет в OSM), в Меркаторе.
+struct FlyoverCircle {
+    let center: CGPoint
+    let radius: Double
+}
+
+/// Остановка облёта: город поездки или целая поездка в итогах года.
 struct FlyoverCity {
     let name: String
-    let countryCode: String?
+    /// «🇮🇹 Италия» для города или флаги и даты для поездки года.
+    let subtitle: String?
     let order: Int
-    /// Центр города (среднее положение фото), Меркатор.
+    /// Центр остановки (среднее положение фото), Меркатор.
     let center: CGPoint
-    /// Контуры границы в Меркаторе (внешние кольца и вырезы — заливка even-odd).
+    /// Контуры границ в Меркаторе (внешние кольца и вырезы — заливка even-odd).
     let rings: [[CGPoint]]
-    /// Радиус круга в Меркаторе, если границы нет.
-    let radius: Double
+    /// Города без границы — кругами.
+    let circles: [FlyoverCircle]
     let photoIDs: [String]
     let photoDates: [Date?]
 
     /// Камера, в которую город помещается с запасом.
     var camera: FlyCamera {
         let cx = Double(center.x), cy = Double(center.y)
-        var minX = cx - radius, maxX = cx + radius
-        var minY = cy - radius, maxY = cy + radius
+        var minX = cx, maxX = cx, minY = cy, maxY = cy
+        for circle in circles {
+            let x = Double(circle.center.x), y = Double(circle.center.y)
+            minX = min(minX, x - circle.radius); maxX = max(maxX, x + circle.radius)
+            minY = min(minY, y - circle.radius); maxY = max(maxY, y + circle.radius)
+        }
         for p in rings.flatMap({ $0 }) {
             minX = min(minX, Double(p.x)); maxX = max(maxX, Double(p.x))
             minY = min(minY, Double(p.y)); maxY = max(maxY, Double(p.y))
@@ -115,12 +127,14 @@ struct FlyoverScript {
 
     static let fps = 30
     static let maxCities = 6
+    /// В итогах года остановки — поездки.
+    static let maxTrips = 8
 
     init(cities: [FlyoverCity], pace: FlyoverPace) {
         self.cities = cities
         overview = Self.overview(for: cities)
 
-        let dynamic = pace == .dynamic || cities.count > 4
+        let dynamic = pace == .dynamic || cities.count > 5
         intro = dynamic ? 1.6 : 2.2
         fly = dynamic ? 1.2 : 1.7
         stay = cities.count == 1 ? 4.0 : (dynamic ? 2.0 : 2.8)

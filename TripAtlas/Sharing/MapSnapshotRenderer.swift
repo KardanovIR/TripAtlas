@@ -13,7 +13,8 @@ enum MapSnapshotRenderer {
         let order: Int
     }
 
-    static func render(zones: [Zone], size: CGSize, dark: Bool, scale: CGFloat = ShareConfig.renderScale) async -> UIImage? {
+    static func render(zones: [Zone], size: CGSize, dark: Bool, numbered: Bool = true,
+                       scale: CGFloat = ShareConfig.renderScale) async -> UIImage? {
         guard !zones.isEmpty else { return nil }
 
         let options = MKMapSnapshotter.Options()
@@ -28,7 +29,7 @@ enum MapSnapshotRenderer {
         options.preferredConfiguration = configuration
 
         guard let snapshot = try? await MKMapSnapshotter(options: options).start() else { return nil }
-        return await MainActor.run { draw(snapshot: snapshot, zones: zones, size: size, scale: scale) }
+        return await MainActor.run { draw(snapshot: snapshot, zones: zones, size: size, numbered: numbered, scale: scale) }
     }
 
     // MARK: - Регион
@@ -61,7 +62,8 @@ enum MapSnapshotRenderer {
     // MARK: - Рисование
 
     @MainActor
-    private static func draw(snapshot: MKMapSnapshotter.Snapshot, zones: [Zone], size: CGSize, scale: CGFloat) -> UIImage {
+    private static func draw(snapshot: MKMapSnapshotter.Snapshot, zones: [Zone], size: CGSize, numbered: Bool,
+                             scale: CGFloat) -> UIImage {
         let format = UIGraphicsImageRendererFormat()
         format.scale = scale
         return UIGraphicsImageRenderer(size: size, format: format).image { context in
@@ -99,7 +101,7 @@ enum MapSnapshotRenderer {
             }
 
             // Номера городов поверх зон.
-            for zone in zones {
+            for zone in zones where numbered {
                 let p = snapshot.point(for: zone.place.coordinate)
                 let r: CGFloat = 10
                 let rect = CGRect(x: p.x - r, y: p.y - r, width: 2 * r, height: 2 * r)

@@ -13,7 +13,7 @@ final class FlyoverModel {
         case failed(String)
     }
 
-    let trip: Trip
+    let subject: ShareSubject
     private(set) var state: State = .idle
     /// Последний отрисованный кадр — живое превью во время сборки.
     private(set) var preview: UIImage?
@@ -27,8 +27,8 @@ final class FlyoverModel {
     private var task: Task<Void, Never>?
     private var exportTask: Task<Void, Error>?
 
-    init(trip: Trip) {
-        self.trip = trip
+    init(subject: ShareSubject) {
+        self.subject = subject
     }
 
     var isBusy: Bool {
@@ -66,9 +66,9 @@ final class FlyoverModel {
         state = .preparing(0)
         preview = nil
 
-        let cities = await FlyoverPreparation.cities(for: trip)
+        let cities = await FlyoverPreparation.stops(for: subject)
         guard !cities.isEmpty else {
-            state = .failed("В поездке нет городов — нечего показать на карте")
+            state = .failed("Нет городов — нечего показать на карте")
             return
         }
         let script = FlyoverScript(cities: cities, pace: pace)
@@ -80,9 +80,9 @@ final class FlyoverModel {
         guard !Task.isCancelled else { return }
 
         let renderer = FlyoverRenderer(script: script, assets: assets,
-                                       info: FlyoverPreparation.info(for: trip), showPhotos: showPhotos)
+                                       info: FlyoverPreparation.info(for: subject), showPhotos: showPhotos)
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("\(ShareConfig.brandName) — \(Self.safeName(trip.title)).mp4")
+            .appendingPathComponent("\(ShareConfig.brandName) — \(Self.safeName(subject.shareTitle)).mp4")
         state = .rendering(0)
 
         do {
