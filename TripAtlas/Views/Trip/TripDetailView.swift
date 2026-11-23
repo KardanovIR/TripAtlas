@@ -20,6 +20,7 @@ struct TripDetailView: View {
     @State private var contentWidth: CGFloat = 0
     @State private var openedZone: CityZone?
     @State private var removeCandidate: RemovalTarget?
+    @State private var showShare = false
 
     private enum RemovalTarget: Identifiable {
         case city(CityZone), country(String)
@@ -49,6 +50,9 @@ struct TripDetailView: View {
                     statsPanel
                         .padding(.top, -50)
 
+                    shareButton
+                        .padding(.top, -14)
+
                     if !zones.isEmpty {
                         mapSection
                         citiesSection
@@ -70,6 +74,9 @@ struct TripDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar { menu }
+        .fullScreenCover(isPresented: $showShare) {
+            ShareComposerView(trip: trip)
+        }
         .fullScreenCover(item: $viewerStart) { selection in
             PhotoViewer(assetIDs: trip.assetIdentifiers, index: selection.id, trip: trip)
         }
@@ -307,7 +314,31 @@ struct TripDetailView: View {
 
     // MARK: - Меню
 
+    private var shareButton: some View {
+        Button { showShare = true } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "sparkles")
+                Text("Поделиться поездкой")
+                Spacer()
+                Image(systemName: "chevron.right").font(.subheadline.weight(.bold))
+            }
+            .font(.headline)
+            .foregroundStyle(.white)
+            .padding(.horizontal, 18)
+            .frame(height: 54)
+            .background(Theme.sunset, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .shadow(color: Theme.rose.opacity(0.3), radius: 12, y: 6)
+        }
+        .buttonStyle(PressableButtonStyle())
+    }
+
+    @ToolbarContentBuilder
     private var menu: some ToolbarContent {
+        ToolbarItem(placement: .topBarTrailing) {
+            Button { showShare = true } label: {
+                Image(systemName: "square.and.arrow.up")
+            }
+        }
         ToolbarItem(placement: .topBarTrailing) {
             Menu {
                 Button("Переименовать", systemImage: "pencil") {
