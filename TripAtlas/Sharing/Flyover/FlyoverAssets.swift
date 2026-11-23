@@ -14,6 +14,7 @@ struct FlyoverAssets {
     var photos: [String: UIImage]
     var logo: UIImage?
     var plane: UIImage?
+    var home: UIImage?
 }
 
 /// Текстовая часть ролика.
@@ -29,6 +30,32 @@ enum FlyoverPreparation {
 
     /// Остановки ролика в хронологическом порядке. Если их слишком много —
     /// оставляем те, где больше всего фото.
+    /// Остановки для итогов года с домом: дом → поездка → дом → … → дом.
+    static func stops(for subject: ShareSubject, home: Coordinate?) async -> [FlyoverCity] {
+        let visits = await stops(for: subject)
+        guard case .year = subject.kind, let home else { return visits }
+
+        let place = await GeocodingService.shared.place(latitude: home.latitude, longitude: home.longitude)
+        let center = Mercator.project(home)
+        let homeStop = FlyoverCity(
+            name: place.city ?? "Дом",
+            subtitle: "🏠 Дом",
+            order: 0,
+            center: center,
+            rings: [],
+            circles: [FlyoverCircle(center: center, radius: Mercator.units(km: 8, latitude: home.latitude))],
+            photoIDs: [],
+            photoDates: [],
+            isHome: true
+        )
+        var result = [homeStop]
+        for visit in visits {
+            result.append(visit)
+            result.append(homeStop)
+        }
+        return result
+    }
+
     static func stops(for subject: ShareSubject) async -> [FlyoverCity] {
         let limit = subject.kind == .trip ? FlyoverScript.maxCities : FlyoverScript.maxTrips
         var stops = subject.stops.filter { !$0.places.isEmpty }
@@ -90,11 +117,20 @@ enum FlyoverPreparation {
                        progress: @escaping (Double) -> Void) async -> FlyoverAssets {
         // Обзор берём с запасом: камера отдаляется на перелётах и в финале.
         var plans: [(CGRect, CGSize)] = [(expand(script.overview.rect, by: 1.7), CGSize(width: 1620, height: 2880))]
+        // Дом повторяется много раз, а перелёты «туда» и «обратно» совпадают — снимаем каждый один раз.
+        var seen = Set<String>()
+        func key(_ c: FlyoverCity) -> String { "\(c.center.x),\(c.center.y)" }
         for (i, city) in script.cities.enumerated() {
-            plans.append((expand(city.camera.rect, by: 1.45), CGSize(width: 1512, height: 2688)))
+            if seen.insert(key(city)).inserted {
+                plans.append((expand(city.camera.rect, by: 1.45), CGSize(width: 1512, height: 2688)))
+            }
             if i > 0 {
-                let pair = script.cities[i - 1].camera.rect.union(city.camera.rect)
-                plans.append((fit(pair, scale: 1.3), CGSize(width: 1080, height: 1920)))
+                let previous = script.cities[i - 1]
+                let pairKey = [key(previous), key(city)].sorted().joined(separator: "|")
+                if seen.insert(pairKey).inserted {
+                    let pair = previous.camera.rect.union(city.camera.rect)
+                    plans.append((fit(pair, scale: 1.3), CGSize(width: 1080, height: 1920)))
+                }
             }
         }
 
@@ -122,7 +158,10 @@ enum FlyoverPreparation {
         let plane = UIImage(systemName: "airplane",
                             withConfiguration: UIImage.SymbolConfiguration(pointSize: 44, weight: .bold))?
             .withTintColor(.white, renderingMode: .alwaysOriginal)
-        return FlyoverAssets(layers: layers, photos: photos, logo: UIImage(named: "ShareLogo"), plane: plane)
+        let home = UIImage(systemName: "house.fill",
+                           withConfiguration: UIImage.SymbolConfiguration(pointSize: 30, weight: .bold))?
+            .withTintColor(UIColor(Theme.rose), renderingMode: .alwaysOriginal)
+        return FlyoverAssets(layers: layers, photos: photos, logo: UIImage(named: "ShareLogo"), plane: plane, home: home)
     }
 
     // MARK: - Снимки

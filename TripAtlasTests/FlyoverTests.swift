@@ -52,6 +52,34 @@ final class FlyoverTests: XCTestCase {
         let overview = FlyoverScript.overview(for: italy).rect
         for c in italy { XCTAssertTrue(overview.contains(c.center), c.name) }
     }
+
+    func testYearWithHomeGoesBackHomeBetweenTrips() {
+        var home = city("Москва", 55.75, 37.62, order: 0)
+        home.isHome = true
+        let trips = [city("Рим", 41.9, 12.5, order: 1), city("Токио", 35.68, 139.69, order: 2)]
+        let stops = [home, trips[0], home, trips[1], home]
+        let script = FlyoverScript(cities: stops, pace: .calm)
+
+        XCTAssertEqual(script.visitNumber(1).0, 1)
+        XCTAssertEqual(script.visitNumber(3).0, 2)
+        XCTAssertEqual(script.visitNumber(3).1, 2)
+        XCTAssertLessThan(script.stayDurations[2], script.stayDurations[1])   // дома — короткая пересадка
+        XCTAssertTrue(script.overview.rect.contains(home.center))
+        let t = script.stayStart(2)
+        XCTAssertEqual(script.camera(at: t - 0.0001).width, script.camera(at: t + 0.0001).width,
+                       accuracy: script.camera(at: t).width * 0.02)
+    }
+
+    func testHomeResolverGivesHomePerYear() {
+        let base = Date(timeIntervalSince1970: 1_700_000_000)   // ноябрь 2023
+        let samples = (0..<40).map { day in
+            PhotoSample(id: "h\(day)", date: base.addingTimeInterval(Double(day) * 86_400),
+                        latitude: 55.75, longitude: 37.62)
+        }
+        let homes = HomeResolver(samples: samples, config: .init()).homes(for: [2023, 2024])
+        XCTAssertEqual(homes[2023]?.latitude ?? 0, 55.75, accuracy: 0.01)
+        XCTAssertNotNil(homes[2024])   // своих фото за 2024 нет — берётся общий дом
+    }
 }
 
 private extension FlyoverScript.Phase {

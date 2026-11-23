@@ -31,7 +31,9 @@ final class TripImporter {
         phase = .scanning
         let config = TripDetector.Config.fromDefaults()
         let found = await Task.detached(priority: .userInitiated) {
-            TripDetector(config: config).detect(PhotoLibraryService.fetchGeotaggedSamples())
+            let samples = PhotoLibraryService.fetchGeotaggedSamples()
+            HomeStore.save(from: samples, config: config)
+            return TripDetector(config: config).detect(samples)
         }.value
 
         let existingRanges = existing.map { ($0.startDate, $0.endDate) }

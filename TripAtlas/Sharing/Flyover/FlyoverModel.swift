@@ -21,8 +21,15 @@ final class FlyoverModel {
 
     var pace: FlyoverPace = .calm
     var showPhotos = true
+    /// Начинать и заканчивать каждую поездку дома (только для итогов года).
+    var showHome = true
     /// Настройки, с которыми собран текущий ролик.
-    private var builtWith: (FlyoverPace, Bool)?
+    private var builtWith: (FlyoverPace, Bool, Bool)?
+
+    var isYear: Bool {
+        if case .year = subject.kind { return true }
+        return false
+    }
 
     private var task: Task<Void, Never>?
     private var exportTask: Task<Void, Error>?
@@ -46,7 +53,7 @@ final class FlyoverModel {
     /// Настройки поменялись после сборки — нужна пересборка.
     var isOutdated: Bool {
         guard let builtWith, videoURL != nil else { return false }
-        return builtWith.0 != pace || builtWith.1 != showPhotos
+        return builtWith.0 != pace || builtWith.1 != showPhotos || builtWith.2 != showHome
     }
 
     func build() {
@@ -62,11 +69,15 @@ final class FlyoverModel {
     }
 
     private func run() async {
-        let pace = self.pace, showPhotos = self.showPhotos
+        let pace = self.pace, showPhotos = self.showPhotos, showHome = self.showHome
         state = .preparing(0)
         preview = nil
 
-        let cities = await FlyoverPreparation.stops(for: subject)
+        var home: Coordinate?
+        if case .year(let year) = subject.kind, showHome {
+            home = await HomeStore.resolve(year: year)
+        }
+        let cities = await FlyoverPreparation.stops(for: subject, home: home)
         guard !cities.isEmpty else {
             state = .failed("Нет городов — нечего показать на карте")
             return
@@ -94,7 +105,7 @@ final class FlyoverModel {
             }
             exportTask = export
             try await export.value
-            builtWith = (pace, showPhotos)
+            builtWith = (pace, showPhotos, showHome)
             state = .ready(url)
         } catch {
             if !Task.isCancelled { state = .failed("Не удалось собрать видео") }

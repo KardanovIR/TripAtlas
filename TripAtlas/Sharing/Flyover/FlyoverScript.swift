@@ -79,6 +79,8 @@ struct FlyoverCity {
     let circles: [FlyoverCircle]
     let photoIDs: [String]
     let photoDates: [Date?]
+    /// Остановка «дома» в итогах года: короткая пересадка, без зоны и фото.
+    var isHome = false
 
     /// Камера, в которую город помещается с запасом.
     var camera: FlyCamera {
@@ -120,10 +122,12 @@ struct FlyoverScript {
     let overview: FlyCamera
 
     let intro: Double
-    let fly: Double
-    let stay: Double
     let outroFly: Double
     let outroHold: Double
+    /// Длительность перелёта к остановке `i` и стоянки в ней.
+    let flyDurations: [Double]
+    let stayDurations: [Double]
+    private let flyStarts: [Double]
 
     static let fps = 30
     static let maxCities = 6
@@ -134,31 +138,50 @@ struct FlyoverScript {
         self.cities = cities
         overview = Self.overview(for: cities)
 
-        let dynamic = pace == .dynamic || cities.count > 5
+        let visits = cities.filter { !$0.isHome }.count
+        let dynamic = pace == .dynamic || visits > 5
+        let fly = dynamic ? 1.2 : 1.7
+        let stay = visits == 1 ? 4.0 : (dynamic ? 2.0 : 2.8)
         intro = dynamic ? 1.6 : 2.2
-        fly = dynamic ? 1.2 : 1.7
-        stay = cities.count == 1 ? 4.0 : (dynamic ? 2.0 : 2.8)
         outroFly = dynamic ? 1.3 : 1.7
         outroHold = 2.8
+
+        // Дом — короткая пересадка: подольше только в самом начале.
+        flyDurations = cities.map { $0.isHome ? fly * 0.85 : fly }
+        stayDurations = cities.enumerated().map { i, city in
+            city.isHome ? (i == 0 ? 0.9 : 0.4) : stay
+        }
+        var starts: [Double] = []
+        var time = intro
+        for i in cities.indices {
+            starts.append(time)
+            time += flyDurations[i] + stayDurations[i]
+        }
+        flyStarts = starts
     }
 
-    var duration: Double {
-        intro + Double(cities.count) * (fly + stay) + outroFly + outroHold
-    }
+    var duration: Double { outroStart + outroFly + outroHold }
 
     var frameCount: Int { Int((duration * Double(Self.fps)).rounded(.up)) }
 
-    /// Начало перелёта к городу `i`.
-    func flyStart(_ i: Int) -> Double { intro + Double(i) * (fly + stay) }
-    /// Начало стоянки в городе `i`.
-    func stayStart(_ i: Int) -> Double { flyStart(i) + fly }
-    var outroStart: Double { intro + Double(cities.count) * (fly + stay) }
+    /// Начало перелёта к остановке `i`.
+    func flyStart(_ i: Int) -> Double { flyStarts[i] }
+    /// Начало стоянки в остановке `i`.
+    func stayStart(_ i: Int) -> Double { flyStarts[i] + flyDurations[i] }
+    func stayEnd(_ i: Int) -> Double { stayStart(i) + stayDurations[i] }
+    var outroStart: Double { cities.isEmpty ? intro : stayEnd(cities.count - 1) }
+
+    /// Номер посещения (без учёта дома) и общее число посещений — для «2 / 5».
+    func visitNumber(_ i: Int) -> (Int, Int) {
+        let visits = cities.indices.filter { !cities[$0].isHome }
+        return ((visits.firstIndex(of: i) ?? 0) + 1, visits.count)
+    }
 
     func phase(at time: Double) -> Phase {
         if time < intro { return .intro(t: time / intro) }
         for i in cities.indices {
-            if time < stayStart(i) { return .fly(to: i, t: (time - flyStart(i)) / fly) }
-            if time < flyStart(i) + fly + stay { return .stay(city: i, t: (time - stayStart(i)) / stay) }
+            if time < stayStart(i) { return .fly(to: i, t: (time - flyStart(i)) / flyDurations[i]) }
+            if time < stayEnd(i) { return .stay(city: i, t: (time - stayStart(i)) / stayDurations[i]) }
         }
         if time < outroStart + outroFly { return .outroFly(t: (time - outroStart) / outroFly) }
         return .outroHold(t: min(1, (time - outroStart - outroFly) / outroHold))
@@ -180,17 +203,17 @@ struct FlyoverScript {
         }
     }
 
-    /// Камера над городом с медленным «наездом».
+    /// Камера над городом с медленным «наездом» (дома — без него: это пересадка).
     func cityCamera(_ i: Int, t: Double) -> FlyCamera {
         var camera = cities[i].camera
-        camera.width *= 1 - 0.1 * t
+        if !cities[i].isHome { camera.width *= 1 - 0.1 * t }
         return camera
     }
 
-    /// Какая часть маршрута к городу `i` уже нарисована (0…1).
+    /// Какая часть маршрута к остановке `i` уже нарисована (0…1).
     func routeProgress(to i: Int, at time: Double) -> Double {
         guard i > 0 else { return 0 }
-        return min(max((time - flyStart(i)) / fly, 0), 1)
+        return min(max((time - flyStart(i)) / flyDurations[i], 0), 1)
     }
 
     /// Насколько «зажжён» город `i` (0…1): разгорается за 0,6 с после прилёта.

@@ -123,6 +123,10 @@ struct FlyoverPanel: View {
             }
             chip("Фото", systemImage: model.showPhotos ? "checkmark.circle.fill" : "photo",
                  selected: model.showPhotos) { model.showPhotos.toggle() }
+            if model.isYear {
+                chip("Дом", systemImage: model.showHome ? "checkmark.circle.fill" : "house",
+                     selected: model.showHome) { model.showHome.toggle() }
+            }
         }
         .disabled(model.isBusy)
         .opacity(model.isBusy ? 0.5 : 1)

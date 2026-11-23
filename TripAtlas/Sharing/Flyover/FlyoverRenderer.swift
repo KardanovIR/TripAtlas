@@ -24,7 +24,9 @@ final class FlyoverRenderer {
         self.showPhotos = showPhotos
         var routes: [[CGPoint]] = [[]]
         for i in script.cities.indices.dropFirst() {
-            routes.append(Self.arc(from: script.cities[i - 1].center, to: script.cities[i].center))
+            // Дорога домой выгибается в другую сторону — туда и обратно не сливаются в одну дугу.
+            routes.append(Self.arc(from: script.cities[i - 1].center, to: script.cities[i].center,
+                                   bendDown: script.cities[i].isHome))
         }
         self.routes = routes
     }
@@ -85,11 +87,12 @@ final class FlyoverRenderer {
 
     // MARK: - Маршрут
 
-    private static func arc(from a: CGPoint, to b: CGPoint, samples: Int = 64) -> [CGPoint] {
+    private static func arc(from a: CGPoint, to b: CGPoint, bendDown: Bool = false, samples: Int = 64) -> [CGPoint] {
         let dx = b.x - a.x, dy = b.y - a.y
         let length = max(hypot(dx, dy), 1e-12)
         var normal = CGPoint(x: -dy / length, y: dx / length)
-        if normal.y > 0 { normal = CGPoint(x: -normal.x, y: -normal.y) }   // дуга выгибается вверх
+        // Дуга выгибается вверх (или вниз — для обратного пути).
+        if (normal.y > 0) != bendDown { normal = CGPoint(x: -normal.x, y: -normal.y) }
         let control = CGPoint(x: (a.x + b.x) / 2 + normal.x * length * 0.22,
                               y: (a.y + b.y) / 2 + normal.y * length * 0.22)
         return (0...samples).map { k in
@@ -159,10 +162,10 @@ final class FlyoverRenderer {
     }
 
     private func drawZones(time: Double, view: CGRect, ctx: CGContext) {
-        for (i, city) in script.cities.enumerated() {
+        for (i, city) in script.cities.enumerated() where !city.isHome {
             let reveal = script.reveal(i, at: time)
             guard reveal > 0 else { continue }
-            let tint = color(i)
+            let tint = color(script.visitNumber(i).0 - 1)
             let emphasis: Double = current(i, time: time) ? 1 : 0.45
             let path = zonePath(city, view: view)
             path.lineWidth = 4
@@ -179,22 +182,38 @@ final class FlyoverRenderer {
     }
 
     private func drawMarkers(time: Double, view: CGRect) {
-        for (i, city) in script.cities.enumerated() {
+        drawHomeMarker(view: view)
+        for (i, city) in script.cities.enumerated() where !city.isHome {
             let reveal = script.reveal(i, at: time)
             guard reveal > 0 else { continue }
             let scale = CGFloat(Ease.outBack(min(1, reveal * 1.2)))
             let c = screen(city.center, view)
             let r = 24 * scale
             let rect = CGRect(x: c.x - r, y: c.y - r, width: 2 * r, height: 2 * r)
-            color(i).setFill()
+            color(script.visitNumber(i).0 - 1).setFill()
             UIBezierPath(ovalIn: rect).fill()
             UIColor.white.setStroke()
             let ring = UIBezierPath(ovalIn: rect)
             ring.lineWidth = 3.5
             ring.stroke()
-            text("\(city.order)", font: Fonts.rounded(26 * scale, .bold), at: CGPoint(x: c.x, y: c.y - 16 * scale),
-                 align: .center, maxWidth: 80, shadow: false)
+            text("\(script.visitNumber(i).0)", font: Fonts.rounded(26 * scale, .bold),
+                 at: CGPoint(x: c.x, y: c.y - 16 * scale), align: .center, maxWidth: 80, shadow: false)
         }
+    }
+
+    /// Домик: виден с самого начала, от него расходятся маршруты года.
+    private func drawHomeMarker(view: CGRect) {
+        guard let home = script.cities.first(where: \.isHome), let icon = assets.home else { return }
+        let c = screen(home.center, view)
+        let r: CGFloat = 30
+        let rect = CGRect(x: c.x - r, y: c.y - r, width: 2 * r, height: 2 * r)
+        let ctx = UIGraphicsGetCurrentContext()
+        ctx?.saveGState()
+        ctx?.setShadow(offset: CGSize(width: 0, height: 3), blur: 14, color: UIColor.black.withAlphaComponent(0.5).cgColor)
+        UIColor.white.setFill()
+        UIBezierPath(ovalIn: rect).fill()
+        ctx?.restoreGState()
+        icon.draw(in: rect.insetBy(dx: 14, dy: 14))
     }
 
     // MARK: - Оформление
@@ -249,17 +268,21 @@ final class FlyoverRenderer {
     // MARK: - Город
 
     private func drawCityLabel(_ i: Int, time: Double) {
+        let city = script.cities[i]
+        // Дом подписываем только в начале — дальше это короткие пересадки.
+        if city.isHome && i > 0 { return }
         let start = script.stayStart(i)
-        let fadeIn = Ease.step(start - 0.3, start + 0.25, time)
-        let fadeOut = 1 - Ease.step(start + script.stay - 0.4, start + script.stay - 0.05, time)
+        let stay = script.stayDurations[i]
+        let fadeIn = Ease.step(start - 0.3, start + min(0.25, stay / 3), time)
+        let fadeOut = 1 - Ease.step(start + stay - min(0.4, stay / 3), start + stay - 0.05, time)
         let alpha = min(fadeIn, fadeOut)
         guard alpha > 0 else { return }
 
-        let city = script.cities[i]
         let x: CGFloat = 60 - CGFloat(1 - fadeIn) * 40
         var y: CGFloat = 240
-        if script.cities.count > 1 {
-            y += text("\(i + 1) / \(script.cities.count)", font: Fonts.rounded(34, .bold), alpha: alpha * 0.75,
+        let (number, total) = script.visitNumber(i)
+        if !city.isHome && total > 1 {
+            y += text("\(number) / \(total)", font: Fonts.rounded(34, .bold), alpha: alpha * 0.75,
                       at: CGPoint(x: x, y: y)).height + 2
         }
         y += text(city.name, font: fitted(city.name, base: 108, min: 56, maxWidth: 960, serif: true), alpha: alpha,
@@ -278,8 +301,10 @@ final class FlyoverRenderer {
 
     private func drawPhotos(_ i: Int, time: Double, ctx: CGContext) {
         let city = script.cities[i]
+        guard !city.isHome else { return }
         let start = script.stayStart(i)
-        let outTime = start + script.stay - 0.3
+        let stay = script.stayDurations[i]
+        let outTime = start + stay - 0.3
         let out = Ease.step(outTime - 0.05, outTime + 0.3, time)
         guard out < 1 else { return }
 
@@ -289,7 +314,7 @@ final class FlyoverRenderer {
         }
         for (slotIndex, item) in shown.enumerated() {
             let (k, image) = item
-            let appear = start + script.stay * (0.12 + 0.17 * Double(slotIndex))
+            let appear = start + stay * (0.12 + 0.17 * Double(slotIndex))
             let p = min(max((time - appear) / 0.45, 0), 1)
             guard p > 0 else { continue }
 
