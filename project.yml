@@ -32,7 +32,7 @@ targets:
         INFOPLIST_KEY_CFBundleDisplayName: "Путешествия"
         INFOPLIST_KEY_NSPhotoLibraryUsageDescription: "Приложение анализирует даты и геолокацию ваших фото, чтобы автоматически находить поездки. Фото не покидают устройство."
         INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription: "Чтобы сохранять карточки ваших поездок в Фото."
-        # Только HTTPS (OpenStreetMap) и SHA-256 для имён файлов кэша — шифрование не требует экспортной декларации.
+        # Только HTTPS (сервер границ городов) и SHA-256 для имён файлов кэша — шифрование не требует экспортной декларации.
         INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
