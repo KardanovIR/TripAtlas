@@ -13,8 +13,8 @@ docker run -d --name "$NAME" --restart no --shm-size=4g \
   -v "$NAME-db:/var/lib/postgresql/16/main" \
   -e PBF_PATH="/data/$PBF" \
   -e IMPORT_STYLE=admin -e REVERSE_ONLY=true -e FREEZE=true \
-  -e THREADS=4 -e GUNICORN_WORKERS=4 \
-  -e POSTGRES_SHARED_BUFFERS=2GB -e POSTGRES_MAINTENANCE_WORK_MEM=1GB -e POSTGRES_AUTOVACUUM_WORK_MEM=512MB \
+  -e THREADS=8 -e GUNICORN_WORKERS=4 \
+  -e POSTGRES_SHARED_BUFFERS=2GB -e POSTGRES_MAINTENANCE_WORK_MEM=768MB -e POSTGRES_AUTOVACUUM_WORK_MEM=512MB \
   -e POSTGRES_EFFECTIVE_CACHE_SIZE=6GB \
   -e NOMINATIM_PASSWORD="$(openssl rand -hex 16)" \
   mediagis/nominatim:5.3.3 >/dev/null
