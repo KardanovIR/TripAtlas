@@ -4,7 +4,7 @@ and are not read by the app).
 
 usage: python3 strict_compare.py <points.json> <public-answers-dir> <country-code|*> <base-url> [delay-s]
   country-code: only points the public server places in that country; '*' compares every point.
-  delay-s: pause between requests (use 0.25 through the public URL: nginx allows 5/s per address).
+  delay-s: pause between requests (0 is fine through the public URL: nginx allows 30/s per address, burst 30).
 """
 import json
 import sys
